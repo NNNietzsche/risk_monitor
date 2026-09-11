@@ -8,8 +8,17 @@ import httpx
 from pydantic import Field, model_validator
 from .models import StrictModel, MonitorCreate, utc
 from .store import Conflict, encoded, stamp, uid, unpack
-from .responses import MonitorOut, EventPage, ObservationOut
+from .responses import MonitorOut, EventPage, ObservationOut, EventOut
 from pydantic import BaseModel
+from typing import Literal
+from .timeline import timeline_assessment
+
+
+class TimelineAssessment(BaseModel):
+    tone: Literal["normal", "warning", "danger", "unknown"]
+    label: str
+    description: str
+    rule_version: int | None = None
 
 
 class NewsOut(BaseModel):
@@ -53,6 +62,8 @@ class AIStatus(BaseModel):
 
 class TimelineOut(ObservationOut):
     name: str
+    events: list[EventOut] = Field(default_factory=list)
+    assessment: TimelineAssessment | None = None
 
 
 class TimelinePage(BaseModel):
@@ -128,6 +139,7 @@ class Portal:
                     input_hash TEXT NOT NULL, input_snapshot TEXT NOT NULL, model TEXT NOT NULL,
                     prompt_version TEXT NOT NULL, content TEXT, error TEXT);
                 CREATE INDEX IF NOT EXISTS idx_ai_created ON ai_runs(created_at);
+                CREATE INDEX IF NOT EXISTS idx_evaluations_observation ON evaluations(observation_id);
             ''')
             db.execute("INSERT OR IGNORE INTO schema_versions VALUES(2,?)", (stamp(),))
 
@@ -222,15 +234,35 @@ class Portal:
         finally:
             self.gate.release()
 
-    def timeline(self, limit=10, offset=0, snapshot=None):
+    def timeline(self, limit=10, offset=0, snapshot=None, kind=None, entry_type="all", severity=None):
         with self.store.connection() as db:
             # Freeze the set of rows while paging so concurrent polling cannot shift pages.
             db.execute("BEGIN")
             if snapshot is None:
                 snapshot = db.execute("SELECT COALESCE(MAX(rowid),0) FROM observations").fetchone()[0]
-            total = db.execute("SELECT COUNT(*) FROM observations WHERE rowid<=?", (snapshot,)).fetchone()[0]
-            rows = db.execute("SELECT o.*,m.name FROM observations o JOIN monitors m ON m.id=o.monitor_id WHERE o.rowid<=? ORDER BY o.observed_at DESC,o.id DESC LIMIT ? OFFSET ?", (snapshot,limit,offset))
-            return {"items": [unpack(r, ("data",)) for r in rows], "total": total, "limit": limit, "offset": offset, "snapshot": snapshot}
+            conditions, args = ["o.rowid<=?"], [snapshot]
+            if kind:
+                conditions.append("m.kind=?")
+                args.append(kind)
+            if entry_type == "quality":
+                conditions.append("o.quality<>'evaluated'")
+            if entry_type == "events" or severity:
+                event_filter = " AND re.severity=?" if severity else ""
+                conditions.append("EXISTS(SELECT 1 FROM evaluations ev JOIN risk_events re ON re.evaluation_id=ev.id WHERE ev.observation_id=o.id" + event_filter + ")")
+                if severity:
+                    args.append(severity)
+            source = " FROM observations o JOIN monitors m ON m.id=o.monitor_id WHERE " + " AND ".join(conditions)
+            total = db.execute("SELECT COUNT(*)" + source, args).fetchone()[0]
+            rows = db.execute("SELECT o.*,m.name" + source + " ORDER BY o.observed_at DESC,o.id DESC LIMIT ? OFFSET ?", (*args,limit,offset)).fetchall()
+            items = []
+            for raw in rows:
+                row = unpack(raw, ("data",))
+                evaluation = unpack(db.execute("SELECT * FROM evaluations WHERE observation_id=? ORDER BY evaluated_at DESC,id DESC LIMIT 1", (row["id"],)).fetchone(), ("evidence",))
+                events = [unpack(r, ("evidence",)) for r in db.execute("SELECT re.*,m.name AS monitor_name,m.kind FROM risk_events re JOIN evaluations ev ON ev.id=re.evaluation_id JOIN monitors m ON m.id=re.monitor_id WHERE ev.observation_id=? ORDER BY re.created_at,re.id", (row["id"],))]
+                row["events"] = events
+                row["assessment"] = timeline_assessment(row, evaluation, events)
+                items.append(row)
+            return {"items": items, "total": total, "limit": limit, "offset": offset, "snapshot": snapshot}
 
     def dashboard(self):
         monitors = self.store.monitors()

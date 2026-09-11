@@ -144,8 +144,9 @@ def create_app(db_path=None, interval=None):
 
     @app.get("/api/v1/timeline", response_model=TimelinePage)
     def timeline(limit: int = Query(default=10, ge=1, le=100), offset: int = Query(default=0, ge=0),
-                 snapshot: int | None = Query(default=None, ge=0)):
-        return portal.timeline(limit, offset, snapshot)
+                 snapshot: int | None = Query(default=None, ge=0), kind: Literal["vessel","flight"] | None = None,
+                 entry_type: Literal["all","events","quality"] = "all", severity: Literal["high","warning","info"] | None = None):
+        return portal.timeline(limit, offset, snapshot, kind, entry_type, severity)
 
     @app.post("/api/v1/demo/seed", response_model=SeedOut)
     def seed_demo():

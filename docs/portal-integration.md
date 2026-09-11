@@ -28,3 +28,11 @@ AI settings 默认关闭并持久化；分析不会改变 monitor、evaluation �
 `GET /api/v1/timeline?limit=10&offset=0` 返回 `{items,total,limit,offset,snapshot}`。后续页面带回相同 snapshot，例如 `?limit=10&offset=10&snapshot=123`。snapshot 是这一轮翻页时的观测记录上限，自动采集新增记录不会导致历史翻页重复或漏行。按 observed_at DESC、id DESC 稳定排序；点击“回到最新”会开始新的快照。首页自动刷新；浏览历史页时保持快照。
 
 Dashboard 仍返回最新10条的 timeline 数组，页面使用独立分页接口；分页参数无效返回422。地图使用已有 Observation.latitude/longitude，字段为空时不显示新的定位点。
+
+## 统一动态与风险呈现
+
+时间线每一项对应一条 Observation，并在 `events` 数组中附带该次评估产生的 Risk Event；同一次采集不会再作为普通动态、规则事件重复显示两行。多条规则事件共用一个动态条目，各有独立证据入口。`assessment` 包含 tone、label、description、rule_version，均依据该条观测对应的历史 evaluation 生成，不使用目标当前状态替换历史事实。
+
+筛选参数：`kind=vessel|flight`、`entry_type=all|events|quality`、`severity=high|warning|info`。指定 severity 只保留包含匹配规则事件的动态；计数和分页均在后端筛选后执行。新增 evaluation.observation_id 索引用于关联事件。
+
+前端沿用原 demo 的 timeline-item、timeline-line、timeline-dot 和 tag 样式。普通更新/恢复为绿色，持续关注或数据质量问题为黄色，高风险/持续取消备降为红色，未评估为灰色；文字标签同时说明状态，不仅靠颜色区分。底层 observations、evaluations、risk_events 仍分别存储，原 events API 与证据链保留。公开新闻仍位于独立的公开风险信息板块。

@@ -4,7 +4,7 @@ const el = (tag, text, cls) => { const n = document.createElement(tag); if (text
 const fmt = value => value ? new Intl.DateTimeFormat('zh-CN', {timeZone:'Asia/Tokyo', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false}).format(new Date(value)) : '—';
 const healthLabel = {ok:'数据有效',unknown:'尚无有效数据',stale:'数据过期',missing:'字段缺失',error:'采集失败',invalid:'数据无效'};
 const severityLabel = {high:'高风险',warning:'关注',info:'信息'};
-let dashboard = null, offset = 0, loading = false;
+let dashboard = null, loading = false;
 let timelineOffset = 0, timelineSnapshot = null, timelineRequest = 0;
 async function api(path, method='GET', body) {
   const r = await fetch('/api/v1' + path, {method, headers:body === undefined ? {} : {'Content-Type':'application/json'}, body:body === undefined ? undefined : JSON.stringify(body)});
@@ -44,13 +44,45 @@ function renderMonitors(items) {
   RiskMaps.draw('vessel-map',ships,id=>action(()=>showMonitor(id)));
   RiskMaps.draw('flight-map',flights,id=>action(()=>showMonitor(id)));
 }
+const eventTitles = {
+  'vessel.first_seen_inside':'首次定位位于风险区域', 'vessel.entered_region':'进入风险区域', 'vessel.exited_region':'离开风险区域',
+  'flight.delay_exceeded':'延误超过阈值', 'flight.delay_recovered':'延误恢复', 'flight.cancelled':'航班取消',
+  'flight.diverted':'航班备降', 'flight.status_restored':'航班状态恢复'
+};
 function renderTimeline(rows) {
-  const box=$('timeline');box.replaceChildren();if(!rows.length)empty(box,'采集状态后将在此记录目标动态。');
-  rows.forEach(r=>{const row=el('div',undefined,'timeline-row'),body=el('div');body.append(el('strong',r.name+' · 状态采集'),el('p',r.quality==='evaluated' ? (r.data.kind==='vessel'?`定位 ${r.data.longitude}, ${r.data.latitude}`:'航班时间及状态已更新') : `数据质量：${r.quality}，未据此推断安全状态`));row.append(el('span',fmt(r.observed_at),'time'),el('span',undefined,'timeline-dot'),body);box.append(row);});
+  const box=$('timeline');box.replaceChildren();
+  if(!rows.length){empty(box,'当前筛选下没有目标动态。');return;}
+  rows.forEach(r=>{
+    const assessment=r.assessment||{tone:'unknown',label:'未评估',description:'尚无对应的判断记录。'};
+    const events=r.events||[],isShip=r.data.kind==='vessel';
+    const item=el('article',undefined,'timeline-item');
+    const time=el('time',undefined,'timeline-time');time.dateTime=r.observed_at;time.title=fmt(r.observed_at)+' JST';
+    time.append(el('span',new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Tokyo',month:'2-digit',day:'2-digit'}).format(new Date(r.observed_at)),'timeline-date'),el('span',new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(r.observed_at))));
+    const line=el('div',undefined,'timeline-line');line.setAttribute('aria-hidden','true');line.append(el('span',undefined,'timeline-dot '+assessment.tone));
+    const content=el('div',undefined,'timeline-content');
+    const title=events.length ? (eventTitles[events[0].type]||'触发风险事件')+(events.length>1?`等 ${events.length} 项动态`:'') : r.quality!=='evaluated'?'数据待关注':isShip?'更新位置':'更新航班状态';
+    content.append(el('h3',r.name+' '+title,'timeline-title'),el('p',assessment.description,'timeline-description'));
+    const tags=el('div',undefined,'timeline-tags');
+    tags.append(el('span',isShip?'船舶':'航班','tag '+(isShip?'tag-ship':'tag-flight')),el('span',assessment.label,'tag '+({normal:'tag-normal',warning:'tag-warning',danger:'tag-danger',unknown:'tag-muted'}[assessment.tone]||'tag-muted')));
+    if(events.length)tags.append(el('span','规则事件','tag tag-muted'));
+    tags.append(el('span','模拟数据','tag tag-muted'));
+    const target=el('button','目标详情','timeline-link');target.onclick=()=>action(()=>showMonitor(r.monitor_id));tags.append(target);
+    events.forEach((event,index)=>{const b=el('button',events.length===1?'查看判断依据':`依据 ${index+1} · ${eventTitles[event.type]||'风险事件'}`,'timeline-link');b.onclick=()=>action(()=>showEvent(event.id));tags.append(b);});
+    content.append(tags);item.append(time,line,content);box.append(item);
+  });
+}
+async function showEvent(id){
+  const d=await api('/events/'+id);openDialog('风险事件与判断依据');
+  const box=$('dialog-body');box.append(el('p',d.summary,'detail-note'));
+  const facts=el('table');
+  for(const [label,value] of [['目标',d.monitor_name],['发生时间',fmt(d.occurred_at)+' JST'],['级别',severityLabel[d.severity]],['规则版本','v'+d.rule.version],['数据来源',d.raw_record.provider]]){const row=el('tr');row.append(el('th',label),el('td',value));facts.append(row);}
+  box.append(facts);jsonDetails('原始记录、历史规则与完整证据',d);
 }
 async function loadTimeline(resetSnapshot=false) {
   const request = ++timelineRequest;
-  const params = new URLSearchParams({limit:10,offset:timelineOffset});
+  const params = new URLSearchParams({limit:10,offset:timelineOffset,entry_type:$('timeline-type').value});
+  if($('timeline-kind').value)params.set('kind',$('timeline-kind').value);
+  if($('timeline-severity').value)params.set('severity',$('timeline-severity').value);
   if (timelineSnapshot !== null && !resetSnapshot) params.set('snapshot',timelineSnapshot);
   const page = await api('/timeline?'+params);
   if (request !== timelineRequest) return;
@@ -60,19 +92,13 @@ async function loadTimeline(resetSnapshot=false) {
   $('timeline-prev').disabled = page.offset === 0;
   $('timeline-next').disabled = page.offset + page.limit >= page.total;
 }
-async function loadEvents() {
-  const params=new URLSearchParams({limit:10,offset});if($('event-kind').value)params.set('kind',$('event-kind').value);if($('event-severity').value)params.set('severity',$('event-severity').value);
-  const page=await api('/events?'+params),box=$('events');box.replaceChildren();if(!page.items.length)empty(box,'当前筛选下没有风险事件。');
-  page.items.forEach(e=>{const b=el('button',undefined,'list-row'),head=el('div',undefined,'row-head');head.append(el('strong',e.summary),chip(severityLabel[e.severity],e.severity));b.append(head,el('p',`${e.monitor_name} · ${fmt(e.occurred_at)} · 规则 v${e.evidence.rule_version} · 模拟数据`));b.onclick=()=>action(async()=>{const d=await api('/events/'+e.id);openDialog('风险事件与判断依据');$('dialog-body').append(el('p',d.summary,'detail-note'));jsonDetails('原始记录、规则版本与判断依据',d,true);});box.append(b);});
-  $('event-page').textContent=`第 ${Math.floor(offset/10)+1} 页 · 共 ${page.total} 条`;$('event-prev').disabled=offset===0;$('event-next').disabled=offset+10>=page.total;
-}
 function renderNews(rows){const box=$('news');box.replaceChildren();if(!rows.length)empty(box,'暂无公开信息。可从现有系统导入，或手动录入带来源的资料。');rows.forEach(n=>{const row=el('article',undefined,'list-row'),head=el('div',undefined,'row-head');head.append(el('strong',n.title),chip(n.is_mock?'演示信息':n.category,n.is_mock?'warning':''));row.append(head,el('p',n.content),el('div',`${fmt(n.published_at)} · ${n.source}`,'time'));if(n.source_url){const a=el('a','查看原始来源','source');a.href=n.source_url;a.target='_blank';a.rel='noopener noreferrer';row.append(a);}box.append(row);});}
 function renderAI(s){$('ai-enabled').checked=s.enabled;$('ai-auto').checked=s.auto_refresh;$('ai-enabled').disabled=!s.configured;$('ai-auto').disabled=!s.enabled;$('ai-refresh').disabled=!s.configured||!s.enabled||s.running;
   $('ai-state').textContent=!s.configured?'未配置接口 · 核心监控照常工作':!s.enabled?'AI 已关闭':s.running?'正在生成':s.last_attempt?.status==='failed'?'调用失败，保留上次分析':s.last_attempt?.status==='success'?'最近生成成功':'已启用 · 接口可用性尚待验证';
   $('ai-meta').textContent=s.analysis?`生成于 ${fmt(s.analysis.created_at)} · ${s.analysis.model} · ${s.analysis.prompt_version} · 依据最近最多 40 个目标、20 条规则事件和 10 条公开信息；之后的数据变化尚不一定包含在内。`:'服务端配置 AI_API_KEY、AI_MODEL 后重启，即可启用。AI 不负责采集数据或判定风险。';
   $('ai-content').textContent=s.analysis?.content||'暂无 AI 分析。规则事件、时间线和公开信息无需 AI 即可呈现。';
 }
-async function refresh(){if(loading)return;loading=true;try{dashboard=await api('/dashboard');renderMonitors(dashboard.monitors);await loadTimeline(timelineOffset===0);renderNews(dashboard.news);renderAI(dashboard.ai);await loadEvents();$('updated').textContent=fmt(dashboard.updated_at)+' JST';$('system-status').textContent=dashboard.monitors.some(m=>m.enabled&&m.health!=='ok')?'数据待关注':'监控服务已连接';}catch(e){$('system-status').textContent='服务连接失败';throw e;}finally{loading=false;}}
+async function refresh(){if(loading)return;loading=true;try{dashboard=await api('/dashboard');renderMonitors(dashboard.monitors);await loadTimeline(timelineOffset===0);renderNews(dashboard.news);renderAI(dashboard.ai);$('updated').textContent=fmt(dashboard.updated_at)+' JST';$('system-status').textContent=dashboard.monitors.some(m=>m.enabled&&m.health!=='ok')?'数据待关注':'监控服务已连接';}catch(e){$('system-status').textContent='服务连接失败';throw e;}finally{loading=false;}}
 function openDialog(title){$('dialog-title').textContent=title;$('dialog-body').replaceChildren();$('dialog-error').textContent='';if(!$('dialog').open)$('dialog').showModal();$('dialog').scrollTop=0;}
 function jsonDetails(title,data,opened=false){const d=el('details');d.open=opened;d.append(el('summary',title),el('pre',JSON.stringify(data,null,2)));$('dialog-body').append(d);}
 function field(form,label,name,type='text',value='',required=true){const l=el('label',undefined,'field'),input=el(type==='textarea'?'textarea':'input');l.append(el('span',label));input.name=name;if(type!=='textarea')input.type=type;input.value=value;input.required=required;l.append(input);form.append(l);return input;}
@@ -92,11 +118,11 @@ function addNews(){openDialog('录入公开风险信息');const f=el('form'),gri
 $('close-dialog').onclick=()=>$('dialog').close();$('add').onclick=()=>action(addMonitor);$('add-news').onclick=addNews;
 for(const [id,path] of [['seed','/demo/seed'],['poll','/poll']])$(id).onclick=()=>action(async()=>{await api(path,'POST');await refresh();},$(id));
 $('refresh').onclick=()=>action(refresh,$('refresh'));
-for(const id of ['event-kind','event-severity'])$(id).onchange=()=>{offset=0;action(loadEvents);};
+for(const id of ['timeline-kind','timeline-type','timeline-severity'])$(id).onchange=()=>{if(id==='timeline-type'&&$('timeline-type').value==='quality')$('timeline-severity').value='';if(id==='timeline-severity'&&$('timeline-severity').value)$('timeline-type').value='events';timelineOffset=0;timelineSnapshot=null;action(loadTimeline);};
 $('timeline-prev').onclick=()=>{timelineOffset=Math.max(0,timelineOffset-10);action(loadTimeline);};
 $('timeline-next').onclick=()=>{timelineOffset+=10;action(loadTimeline);};
 $('timeline-latest').onclick=()=>{timelineOffset=0;timelineSnapshot=null;action(loadTimeline);};
-$('event-prev').onclick=()=>{offset=Math.max(0,offset-10);action(loadEvents);};$('event-next').onclick=()=>{offset+=10;action(loadEvents);};
+
 for(const id of ['ai-enabled','ai-auto'])$(id).onchange=()=>action(async()=>{try{renderAI(await api('/ai/settings','PATCH',{enabled:$('ai-enabled').checked,auto_refresh:$('ai-auto').checked}));}catch(e){renderAI(await api('/ai/status'));throw e;}});
 $('ai-refresh').onclick=()=>action(async()=>{renderAI(await api('/ai/refresh','POST'));},$('ai-refresh'));
 $('header-date').textContent=new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Tokyo',dateStyle:'long'}).format(new Date());

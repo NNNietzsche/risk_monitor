@@ -587,6 +587,62 @@
               ],
               "title": "Snapshot"
             }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "vessel",
+                    "flight"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "entry_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "all",
+                "events",
+                "quality"
+              ],
+              "type": "string",
+              "default": "all",
+              "title": "Entry Type"
+            }
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "high",
+                    "warning",
+                    "info"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Severity"
+            }
           }
         ],
         "responses": {
@@ -2495,6 +2551,46 @@
         ],
         "title": "SeedOut"
       },
+      "TimelineAssessment": {
+        "properties": {
+          "tone": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "warning",
+              "danger",
+              "unknown"
+            ],
+            "title": "Tone"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "rule_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tone",
+          "label",
+          "description"
+        ],
+        "title": "TimelineAssessment"
+      },
       "TimelineOut": {
         "properties": {
           "id": {
@@ -2523,6 +2619,23 @@
           "name": {
             "type": "string",
             "title": "Name"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/EventOut"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "assessment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TimelineAssessment"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

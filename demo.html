@@ -103,8 +103,17 @@
     <article class="panel"><div class="panel-heading"><h3>船舶跟踪</h3><span class="badge">区域进出监控</span></div><div id="vessel-map" class="coordinate-map" aria-label="船舶世界地图"></div><p class="map-note">离线世界底图 · 矩形为监控区域 · 支持拖动、缩放和点击目标。</p><div id="vessels" class="target-list"></div></article>
     <article class="panel"><div class="panel-heading"><h3>航空跟踪</h3><span class="badge">按日期区分航班</span></div><div id="flight-map" class="coordinate-map" aria-label="航空世界地图"></div><p class="map-note">模拟位置，不代表实际航迹 · 灰色标记为历史定位 · 无数据不猜测位置。</p><div id="flights" class="target-list"></div></article>
   </div></section>
-  <section class="section panel"><div class="panel-heading"><h2>目标动态时间线</h2><span class="muted">每页 10 条标准化状态 · 含数据质量</span></div><div id="timeline"></div><div class="pagination"><button id="timeline-latest">回到最新</button><button id="timeline-prev">上一页</button><span id="timeline-page" aria-live="polite"></span><button id="timeline-next">下一页</button></div></section>
-  <section class="section panel"><div class="panel-heading"><h2>规则风险事件</h2><div class="actions"><select id="event-kind" aria-label="事件类型"><option value="">全部类型</option><option value="vessel">船舶</option><option value="flight">航空</option></select><select id="event-severity" aria-label="事件级别"><option value="">全部级别</option><option value="high">高风险</option><option value="warning">关注</option><option value="info">信息</option></select></div></div><div id="events"></div><div class="pagination"><button id="event-prev">上一页</button><span id="event-page"></span><button id="event-next">下一页</button></div></section>
+  <section class="section" aria-labelledby="timeline-title">
+    <div class="section-header timeline-heading">
+      <div><h2 id="timeline-title" class="section-title">目标动态时间线</h2><p class="section-description">指定船舶及飞机最近动态 · 状态更新与风险事件 · 每页 10 条</p></div>
+      <div class="actions timeline-filters">
+        <select id="timeline-kind" aria-label="目标类型"><option value="">全部目标</option><option value="vessel">船舶</option><option value="flight">航班</option></select>
+        <select id="timeline-type" aria-label="动态类型"><option value="all">全部动态</option><option value="events">仅规则事件</option><option value="quality">数据质量</option></select>
+        <select id="timeline-severity" aria-label="事件级别"><option value="">全部级别</option><option value="high">高风险事件</option><option value="warning">关注事件</option><option value="info">恢复信息</option></select>
+      </div>
+    </div>
+    <div class="timeline-shell"><div id="timeline" class="timeline"></div><div class="pagination"><button id="timeline-latest">回到最新</button><button id="timeline-prev">上一页</button><span id="timeline-page" aria-live="polite"></span><button id="timeline-next">下一页</button></div></div>
+  </section>
   <section class="section panel"><div class="panel-heading"><h2>公开风险信息</h2><button id="add-news">录入公开信息</button></div><p class="muted section-note">来源内容供查阅和分析，未经规则验证的新闻不会直接改变目标状态。</p><div id="news"></div></section>
   <section class="section panel"><div class="panel-heading"><div><h2>AI 风险解释</h2><p class="muted">可选功能 · 仅在成功生成后更新分析</p></div><button id="ai-refresh">更新 AI 分析</button></div><div class="ai-controls"><label><input type="checkbox" id="ai-enabled">启用 AI</label><label><input type="checkbox" id="ai-auto">资料变化后自动更新</label><span id="ai-state" class="muted"></span></div><p id="ai-meta" class="muted section-note"></p><div id="ai-content" class="analysis-text"></div></section>
   <dialog id="dialog" aria-labelledby="dialog-title"><div class="dialog-head"><h2 id="dialog-title"></h2><button id="close-dialog" aria-label="关闭">×</button></div><div id="dialog-body"></div><p id="dialog-error" role="alert"></p></dialog>
