@@ -3,7 +3,7 @@ Set-Location -LiteralPath $PSScriptRoot
 if (-not (Test-Path -LiteralPath './.venv/Scripts/python.exe')) { throw 'Run .\Setup.ps1 first.' }
 if (Test-Path -LiteralPath '.env') {
     foreach ($line in Get-Content -LiteralPath '.env' -Encoding UTF8) {
-        if ($line -match '^\s*(RISK_DB_PATH|RISK_POLL_SECONDS|AI_API_KEY|AI_BASE_URL|AI_MODEL)\s*=(.*)$') {
+        if ($line -match '^\s*(RISK_DB_PATH|RISK_POLL_SECONDS|AI_API_KEY|AI_BASE_URL|AI_MODEL|PUBLIC_DATA_CONTACT)\s*=(.*)$') {
             [Environment]::SetEnvironmentVariable($matches[1], $matches[2].Trim().Trim('"').Trim("'"), 'Process')
         }
     }

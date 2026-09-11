@@ -35,7 +35,7 @@ window.RiskMaps = (() => {
       const marker=create('g',{tabindex:0,role:'button','aria-label':`${m.name}，${d.longitude}，${d.latitude}${historical?'，历史定位':''}`,class:'map-marker'});
       const title=create('title',{},`${m.name}\n${d.longitude}°, ${d.latitude}°\n${m.latest.observed_at}${historical?' · 历史定位':''}`);
       const dot=create('circle',{cx:0,cy:0,r:8,fill:color,stroke:'white','stroke-width':2});
-      const icon=create('text',{x:0,y:3.5,'text-anchor':'middle',fill:'white','font-size':10,'pointer-events':'none'},m.kind==='flight'?'✈':'◆');
+      const icon=create('text',{x:0,y:3.5,'text-anchor':'middle',fill:'white','font-size':10,'pointer-events':'none'},m.kind==='vessel'?'◆':'✈');
       const label=create('text',{x:12,y:4,fill:'#29455e','font-size':10,'paint-order':'stroke',stroke:'#ffffff','stroke-width':3,'stroke-linejoin':'round','pointer-events':'none'},m.name.length>22?m.name.slice(0,22)+'…':m.name);
       if(x>580){label.setAttribute('x',-12);label.setAttribute('text-anchor','end');}
       marker.append(title,dot,icon,label);marker.onclick=()=>openTarget(m.id);marker.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openTarget(m.id);}};
@@ -46,7 +46,7 @@ window.RiskMaps = (() => {
     const controls=document.createElement('div');controls.className='map-controls';
     function button(text,fn,title){const b=document.createElement('button');b.textContent=text;b.type='button';b.setAttribute('aria-label',title||text);b.onclick=fn;controls.append(b);}
     button('+',()=>zoom(.5),'放大地图');button('−',()=>zoom(2),'缩小地图');
-    button('定位目标',()=>{if(!points.length)return;const xs=points.map(p=>p.x),ys=points.map(p=>p.y),xmin=Math.min(...xs),xmax=Math.max(...xs),ymin=Math.min(...ys),ymax=Math.max(...ys);const w=Math.min(720,Math.max(80,(xmax-xmin)*1.5,(ymax-ymin)*3));state.view=[(xmin+xmax-w)/2,(ymin+ymax-w/2)/2,w,w/2];apply();});
+    button('显示全部目标',()=>{if(!points.length)return;const xs=points.map(p=>p.x),ys=points.map(p=>p.y),xmin=Math.min(...xs),xmax=Math.max(...xs),ymin=Math.min(...ys),ymax=Math.max(...ys);const w=Math.min(720,Math.max(80,(xmax-xmin)*1.5,(ymax-ymin)*3));state.view=[(xmin+xmax-w)/2,(ymin+ymax-w/2)/2,w,w/2];apply();});
     button('全球',()=>{state.view=[0,0,720,360];apply();});
     let drag=null;
     svg.onpointerdown=e=>{if(e.target.closest('.map-marker')||e.button!==0)return;drag={x:e.clientX,y:e.clientY,view:[...state.view]};svg.setPointerCapture(e.pointerId);};

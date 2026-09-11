@@ -8,6 +8,8 @@ from pathlib import Path
 from .models import MonitorCreate, RegionCreate
 from .providers import MockProvider, VESSEL_SCENARIOS, FLIGHT_SCENARIOS
 from .rules import ENGINE_VERSION, evaluate
+from .live_providers import PublicHTTP, DigitrafficProvider, ADSBLolProvider
+from .migrations import migrate_aircraft
 
 
 def stamp():
@@ -57,7 +59,8 @@ class Store:
         self.path = str(path)
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
-        self.providers = {"mock-v1": MockProvider()}
+        self.public_http = PublicHTTP()
+        self.providers = {"mock-v1": MockProvider(), "digitraffic-v1": DigitrafficProvider(self.public_http), "adsblol-v1": ADSBLolProvider(self.public_http)}
         with self.connection() as db:
             db.executescript(Path(__file__).with_name("schema.sql").read_text(encoding="utf-8"))
             db.execute("INSERT OR IGNORE INTO schema_versions VALUES (1,?)", (stamp(),))
@@ -66,6 +69,7 @@ class Store:
                         encoded({"type": "Polygon", "coordinates": [[[40,10],[50,10],[50,20],[40,20],[40,10]]],
                                  "bbox": [40,10,50,20]}), stamp()))
             db.execute("PRAGMA optimize")
+        migrate_aircraft(self.path)
 
     def connection(self):
         db = sqlite3.connect(self.path, timeout=15)
@@ -118,7 +122,9 @@ class Store:
     def create_monitor(self, request: MonitorCreate):
         m_id, rule_id = uid(), uid()
         asset_id = flight_id = None
-        config = {"max_age_seconds": 900}
+        config = {"max_age_seconds": 120 if request.kind == "aircraft" else 900}
+        if request.provider != "mock-v1":
+            config["min_poll_seconds"] = 60
         try:
             with self.lock, self.connection() as db:
                 db.execute("BEGIN IMMEDIATE")
@@ -129,6 +135,12 @@ class Store:
                     db.execute("INSERT INTO assets(id,kind,name,imo,mmsi) VALUES (?,?,?,?,?)",
                                (asset_id, "vessel", request.name, request.imo, request.mmsi))
                     config["region_id"] = request.region_id
+                elif request.kind == "aircraft":
+                    row = db.execute("SELECT id FROM assets WHERE registration=?", (request.aircraft_registration,)).fetchone()
+                    asset_id = row["id"] if row else uid()
+                    if not row:
+                        db.execute("INSERT INTO assets(id,kind,name,registration) VALUES (?,?,?,?)", (asset_id, "aircraft", request.name, request.aircraft_registration))
+                    config.update(icao24=request.icao24, capabilities=["position"], flight_risk_assessed=False)
                 else:
                     aircraft_id = None
                     if request.aircraft_registration:
@@ -143,11 +155,11 @@ class Store:
                                 request.departure, request.arrival, request.scheduled_departure.isoformat(), request.scheduled_arrival.isoformat()))
                     config.update(threshold_minutes=request.threshold_minutes, delay_basis=request.delay_basis)
                 db.execute("INSERT INTO rule_versions VALUES (?,?,?,?,?,?)", (rule_id, request.kind, 1, ENGINE_VERSION, encoded(config), stamp()))
-                db.execute("INSERT INTO monitors(id,name,kind,asset_id,flight_id,rule_id,created_at) VALUES (?,?,?,?,?,?,?)",
-                           (m_id, request.name, request.kind, asset_id, flight_id, rule_id, stamp()))
+                db.execute("INSERT INTO monitors(id,name,kind,asset_id,flight_id,rule_id,provider,created_at) VALUES (?,?,?,?,?,?,?,?)",
+                           (m_id, request.name, request.kind, asset_id, flight_id, rule_id, request.provider, stamp()))
                 self._audit(db, m_id, "created", {}, request.model_dump(mode="json"))
         except sqlite3.IntegrityError as exc:
-            raise Conflict("相同 IMO/MMSI 的船舶或相同航班实例已经存在") from exc
+            raise Conflict("相同 IMO/MMSI 的船舶、飞机实体或航班实例已经存在") from exc
         return self.detail(m_id)
 
     def _audit(self, db, monitor_id, action, before, after):
@@ -183,7 +195,12 @@ class Store:
                 m = self._target(db, monitor_id)
             if not m["enabled"]:
                 raise Conflict("该监控已暂停")
-            allowed = VESSEL_SCENARIOS if m["kind"] == "vessel" else FLIGHT_SCENARIOS
+            if m["provider"] != "mock-v1":
+                if scenario != "sequence":
+                    raise ValueError("真实数据源不支持模拟场景")
+                if m["last_poll_at"] and (datetime.now(timezone.utc)-datetime.fromisoformat(m["last_poll_at"])).total_seconds() < m["rule"]["config"].get("min_poll_seconds",60):
+                    return {"raw_id":None,"outcome":"throttled","events":[]}
+            allowed = {"sequence"} if m["provider"] != "mock-v1" else VESSEL_SCENARIOS if m["kind"] == "vessel" else FLIGHT_SCENARIOS
             if scenario not in allowed:
                 raise ValueError("此场景不适用于该监控类型")
             now, raw_id = datetime.now(timezone.utc), uid()
@@ -192,7 +209,7 @@ class Store:
             try:
                 payload = provider.fetch(m, scenario, now)
             except (TimeoutError, ConnectionError, ValueError) as exc:
-                payload, error = {"scenario": scenario, "error": str(exc), "mock": True}, str(exc)
+                payload, error = getattr(exc, "payload", {"scenario": scenario, "error": str(exc), "mock": m["provider"] == "mock-v1"}), str(exc)
             body = encoded(payload)
             # Commit original data before any normalization or risk evaluation.
             with self.connection() as db:
@@ -215,16 +232,18 @@ class Store:
                 with self.connection() as db:
                     db.execute("BEGIN IMMEDIATE")
                     m = self._target(db, monitor_id)
-                    latest_any = db.execute("SELECT observed_at FROM observations WHERE monitor_id=? ORDER BY observed_at DESC LIMIT 1", (monitor_id,)).fetchone()
-                    if latest_any and observed_at <= latest_any["observed_at"]:
-                        outcome = "duplicate" if observed_at == latest_any["observed_at"] else "out_of_order"
-                        db.execute("UPDATE raw_records SET outcome=? WHERE id=?", (outcome, raw_id))
-                        return {"raw_id": raw_id, "outcome": outcome, "events": []}
                     age = (now - observation.observed_at).total_seconds()
                     if age > m["rule"]["config"]["max_age_seconds"] or age < -60:
                         outcome = "stale" if age > 0 else "future"
                         db.execute("UPDATE raw_records SET outcome=? WHERE id=?", (outcome, raw_id))
                         db.execute("UPDATE monitors SET health=?,last_error=? WHERE id=?", (outcome, "数据时间不在有效窗口内", monitor_id))
+                        return {"raw_id": raw_id, "outcome": outcome, "events": []}
+                    latest_any = db.execute("SELECT observed_at,quality FROM observations WHERE monitor_id=? ORDER BY observed_at DESC LIMIT 1", (monitor_id,)).fetchone()
+                    if latest_any and observed_at <= latest_any["observed_at"]:
+                        outcome = "duplicate" if observed_at == latest_any["observed_at"] else "out_of_order"
+                        db.execute("UPDATE raw_records SET outcome=? WHERE id=?", (outcome, raw_id))
+                        if outcome == "duplicate" and latest_any["quality"] == "evaluated" and m["state"]:
+                            db.execute("UPDATE monitors SET health='ok',last_error=NULL WHERE id=?", (monitor_id,))
                         return {"raw_id": raw_id, "outcome": outcome, "events": []}
                     state, quality, evidence, specs = evaluate(m, data)
                     obs_id, evaluation_id = uid(), uid()

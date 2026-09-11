@@ -15,8 +15,10 @@ def utc(value: datetime) -> datetime:
 
 
 class MonitorCreate(StrictModel):
-    kind: Literal["vessel", "flight"]
+    kind: Literal["vessel", "flight", "aircraft"]
     name: str = Field(min_length=1, max_length=100)
+    provider: Literal["mock-v1", "digitraffic-v1", "adsblol-v1"] = "mock-v1"
+    icao24: str | None = Field(default=None, pattern=r"^[0-9a-f]{6}$")
     imo: str | None = Field(default=None, pattern=r"^\d{7}$")
     mmsi: str | None = Field(default=None, pattern=r"^\d{9}$")
     region_id: str | None = None
@@ -34,6 +36,18 @@ class MonitorCreate(StrictModel):
     @model_validator(mode="after")
     def validate_business(self):
         flight_fields = ("carrier", "flight_number", "service_date", "departure", "arrival", "scheduled_departure", "scheduled_arrival")
+        if self.provider == "digitraffic-v1" and (self.kind != "vessel" or not self.mmsi):
+            raise ValueError("Digitraffic 仅支持有 MMSI 的船舶")
+        if self.provider == "adsblol-v1" and self.kind != "aircraft":
+            raise ValueError("ADSB.lol 仅提供飞机实体位置")
+        if self.kind == "aircraft":
+            if self.provider != "adsblol-v1" or not self.icao24 or not self.aircraft_registration:
+                raise ValueError("飞机位置监控需要 ADSB.lol、ICAO24 和注册号")
+            if any(getattr(self, key) is not None for key in (*flight_fields, "imo", "mmsi", "region_id")):
+                raise ValueError("飞机实体不能包含具体航班或船舶字段")
+            return self
+        if self.icao24:
+            raise ValueError("ICAO24 仅用于飞机实体")
         if self.kind == "vessel":
             if not self.imo and not self.mmsi:
                 raise ValueError("船舶至少需要 IMO 或 MMSI")
@@ -106,10 +120,12 @@ class PollRequest(StrictModel):
 
 class Observation(StrictModel):
     observed_at: datetime
-    kind: Literal["vessel", "flight"]
+    kind: Literal["vessel", "flight", "aircraft"]
     latitude: float | None = Field(default=None, ge=-90, le=90, allow_inf_nan=False)
     longitude: float | None = Field(default=None, ge=-180, le=180, allow_inf_nan=False)
     navigation_status: str | None = None
+    callsign: str | None = None
+    aircraft_type: str | None = None
     estimated_departure: datetime | None = None
     actual_departure: datetime | None = None
     estimated_arrival: datetime | None = None

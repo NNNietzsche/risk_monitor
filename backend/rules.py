@@ -26,6 +26,12 @@ def evaluate(target, observation):
             events.append(("vessel.exited_region", "info", "船舶已离开风险区域"))
         return {"inside": inside}, "evaluated", evidence, events
 
+    if target["kind"] == "aircraft":
+        evidence.update(operator="position_available", capabilities=["position"], flight_risk_assessed=False)
+        if observation.get("latitude") is None or observation.get("longitude") is None:
+            return None, "missing", evidence, events
+        return {"position_available":True,"flight_risk_assessed":False}, "evaluated", evidence, events
+
     status, basis = observation.get("flight_status"), config["delay_basis"]
     actual, estimated = observation.get("actual_" + basis), observation.get("estimated_" + basis)
     chosen = actual or estimated

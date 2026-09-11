@@ -15,6 +15,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from .responses import (RegionOut, MonitorOut, MonitorDetail, EventPage, EventDetail, PollResult, BatchPollResult, HealthOut)
 from .models import MonitorCreate, MonitorPatch, PollRequest, RegionCreate, RuleChange, utc
 from .store import Store, NotFound, Conflict
+from .live_providers import discover, SOURCES
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -57,7 +58,7 @@ def create_app(db_path=None, interval=None):
                 await task
 
     app = FastAPI(title="资产风险监控 API", version="0.1.0", lifespan=lifespan,
-                  description="本地 Mock MVP；确定性规则与可追溯事件。")
+                  description="公开 AIS / ADS-B 与 Mock Provider；确定性规则与可追溯事件。")
     app.state.store = store
     app.state.portal = portal
     app.add_middleware(CORSMiddleware, allow_origins=["http://127.0.0.1:3000", "http://localhost:3000"],
@@ -86,7 +87,16 @@ def create_app(db_path=None, interval=None):
 
     @app.get("/api/v1/health", response_model=HealthOut)
     def health():
-        return {"status": "ok", "mode": "mock", "scheduler_seconds": seconds, "engine_version": "1.0.0"}
+        modes = {m["provider"] != "mock-v1" for m in store.monitors() if m["enabled"]}
+        return {"status": "ok", "mode": "mixed" if len(modes)>1 else "live" if modes == {True} else "mock", "scheduler_seconds": seconds, "engine_version": "1.0.0"}
+
+    @app.get("/api/v1/public/targets")
+    def public_targets():
+        return discover(store.public_http)
+
+    @app.get("/api/v1/public/sources")
+    def public_sources():
+        return SOURCES
 
     @app.get("/api/v1/regions", response_model=list[RegionOut])
     def regions():
@@ -125,7 +135,7 @@ def create_app(db_path=None, interval=None):
         return {"items": store.poll_all()}
 
     @app.get("/api/v1/events", response_model=EventPage)
-    def events(monitor_id: str | None = None, kind: Literal["vessel","flight"] | None = None,
+    def events(monitor_id: str | None = None, kind: Literal["vessel","flight","aircraft"] | None = None,
                severity: Literal["high","warning","info"] | None = None,
                since: datetime | None = None, until: datetime | None = None,
                limit: int = Query(default=100, ge=1, le=200), offset: int = Query(default=0, ge=0)):
@@ -144,7 +154,7 @@ def create_app(db_path=None, interval=None):
 
     @app.get("/api/v1/timeline", response_model=TimelinePage)
     def timeline(limit: int = Query(default=10, ge=1, le=100), offset: int = Query(default=0, ge=0),
-                 snapshot: int | None = Query(default=None, ge=0), kind: Literal["vessel","flight"] | None = None,
+                 snapshot: int | None = Query(default=None, ge=0), kind: Literal["vessel","flight","aircraft"] | None = None,
                  entry_type: Literal["all","events","quality"] = "all", severity: Literal["high","warning","info"] | None = None):
         return portal.timeline(limit, offset, snapshot, kind, entry_type, severity)
 

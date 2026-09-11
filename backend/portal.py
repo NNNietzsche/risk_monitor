@@ -61,6 +61,7 @@ class AIStatus(BaseModel):
 
 
 class TimelineOut(ObservationOut):
+    provider: str = "mock-v1"
     name: str
     events: list[EventOut] = Field(default_factory=list)
     assessment: TimelineAssessment | None = None
@@ -186,7 +187,7 @@ class Portal:
         return self.status()
 
     def snapshot(self):
-        return {"mode": "mock", "monitors": [{"id": m["id"], "name": m["name"], "kind": m["kind"], "enabled": m["enabled"], "health": m["health"], "state": m["state"], "rule": m["rule"], "observation": m["latest"]} for m in self.store.monitors()[:40]], "events": self.store.events(limit=20)["items"], "public_news": self.news()[:10]}
+        return {"mode": "per_monitor", "monitors": [{"id": m["id"], "name": m["name"], "kind": m["kind"], "provider": m["provider"], "is_mock": m["provider"] == "mock-v1", "enabled": m["enabled"], "health": m["health"], "state": m["state"], "rule": m["rule"], "observation": m["latest"]} for m in self.store.monitors()[:40]], "events": self.store.events(limit=20)["items"], "public_news": self.news()[:10]}
 
     def refresh(self, automatic=False):
         if not self.gate.acquire(blocking=False):
@@ -253,7 +254,7 @@ class Portal:
                     args.append(severity)
             source = " FROM observations o JOIN monitors m ON m.id=o.monitor_id WHERE " + " AND ".join(conditions)
             total = db.execute("SELECT COUNT(*)" + source, args).fetchone()[0]
-            rows = db.execute("SELECT o.*,m.name" + source + " ORDER BY o.observed_at DESC,o.id DESC LIMIT ? OFFSET ?", (*args,limit,offset)).fetchall()
+            rows = db.execute("SELECT o.*,m.name,m.provider" + source + " ORDER BY o.observed_at DESC,o.id DESC LIMIT ? OFFSET ?", (*args,limit,offset)).fetchall()
             items = []
             for raw in rows:
                 row = unpack(raw, ("data",))

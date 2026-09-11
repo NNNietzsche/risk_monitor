@@ -1,7 +1,7 @@
 # 风险资产监控 MVP 设计
 
 ## 目标与业务口径
-本地 FastAPI 单体服务 + 原生 HTML/CSS/JS 页面 + SQLite。数据源只有 mock-v1，页面和事件明确标记模拟。
+本地 FastAPI 单体服务 + 原生 HTML/CSS/JS 页面 + SQLite。数据源包含 mock-v1、digitraffic-v1 和 adsblol-v1；页面和事件按来源区分真实与模拟，详见 [公开数据接入](public-data.md)。
 添加 → 采集 → 原始数据落库 → 标准化 → 数据质量检查 → 确定性规则 → 事件 → 展示。
 
 - 船舶优先 IMO（验证校验位），可用 MMSI；名称不是身份。一个船舶监控一个矩形区域。
@@ -27,7 +27,7 @@
 一次状态、评估、事件、监控状态更新处于同一事务中。
 原始记录使用规范 JSON SHA-256，用于内容核对；不是防篡改签名或 WORM 审计。
 本地 MVP 仅支持单进程（不要增加 uvicorn workers）；RLock 串行化采集与配置变更，SQLite WAL + 事务保证一致性。
-SQLite 文件的真实迁移记录为 schema_versions；v1 为监控基线，v2 在 Portal 初始化时增建公开信息、AI 开关和 AI 调用审计表。下一次结构修改必须新增显式迁移，不能修改已有基线猜测迁移结果。
+SQLite 文件的真实迁移记录为 schema_versions；v1 为监控基线，v2 在 Portal 初始化时增建公开信息、AI 开关和 AI 调用审计表；v3 显式备份并迁移监控对象约束以允许飞机实体，验证外键和历史数据保留。下一次结构修改必须新增显式迁移，不能修改已有基线猜测迁移结果。
 
 ## ER 图
 ```mermaid
@@ -53,6 +53,8 @@ region_id 位于规则配置 JSON，由应用校验；ER 此边是逻辑关联�
 ## 代码职责
 - backend/models.py：输入、标准化模型与业务校验。
 - backend/providers.py：Provider 协议与 Mock。
+- backend/live_providers.py：公开源、身份校验、时间标准化、限频缓存。
+- backend/migrations.py：保留历史的飞机实体约束迁移。
 - backend/rules.py：确定性规则。
 - backend/store.py / schema.sql：持久化与配置审计。
 - backend/app.py：REST Contract、任务调度。
@@ -62,10 +64,10 @@ region_id 位于规则配置 JSON，由应用校验；ER 此边是逻辑关联�
 
 ## 已知边界
 - 区域仅支持不跨日界线的经纬度矩形，以 GeoJSON Polygon 存储；无空洞、航迹插值。
-- 页面使用本地 Natural Earth 世界陆地底图，无在线瓦片或地图 API 依赖；位置为 Mock，非实测航迹。
+- 页面使用本地 Natural Earth 世界陆地底图，无在线瓦片或地图 API 依赖；位置按目标使用真实公开源或 Mock；点位更新不等同于完整航迹。
 - 不支持 AIS 长时间失联业务规则、股票/企业监控、推送、账户和高可用。
 - 飞机实体有独立关系，暂无独立飞机监控或身份变更历史流程。
 - 船舶身份可用 IMO 或 MMSI；跨标识合并及 MMSI 历史变化需真实数据接入时扩展。
-- 同一时间戳的供应商修订当前按重复忽略，接真实 API 前需加入供应商序列号/修订版本。
+- 同一时间戳的供应商修订当前按重复忽略，本次公开源保留此限制；支持修订的后续供应商应接入序列号/修订版本。
 - 只保留创建时的计划时间基准；未来可额外记录供应商计划修订，但不能悄悄重置延误基准。
 - SQLite 是本地可追溯存储，不是合规归档；正式环境需要受控权限、留存、加密备份和审计增强。

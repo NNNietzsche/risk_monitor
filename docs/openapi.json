@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "资产风险监控 API",
-    "description": "本地 Mock MVP；确定性规则与可追溯事件。",
+    "description": "公开 AIS / ADS-B 与 Mock Provider；确定性规则与可追溯事件。",
     "version": "0.1.0"
   },
   "paths": {
@@ -18,6 +18,38 @@
                 "schema": {
                   "$ref": "#/components/schemas/HealthOut"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public/targets": {
+      "get": {
+        "summary": "Public Targets",
+        "operationId": "public_targets_api_v1_public_targets_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public/sources": {
+      "get": {
+        "summary": "Public Sources",
+        "operationId": "public_sources_api_v1_public_sources_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           }
@@ -372,7 +404,8 @@
                 {
                   "enum": [
                     "vessel",
-                    "flight"
+                    "flight",
+                    "aircraft"
                   ],
                   "type": "string"
                 },
@@ -597,7 +630,8 @@
                 {
                   "enum": [
                     "vessel",
-                    "flight"
+                    "flight",
+                    "aircraft"
                   ],
                   "type": "string"
                 },
@@ -1163,7 +1197,8 @@
             "type": "string",
             "enum": [
               "vessel",
-              "flight"
+              "flight",
+              "aircraft"
             ],
             "title": "Kind"
           },
@@ -1261,7 +1296,8 @@
             "type": "string",
             "enum": [
               "vessel",
-              "flight"
+              "flight",
+              "aircraft"
             ],
             "title": "Kind"
           },
@@ -1435,7 +1471,11 @@
           },
           "mode": {
             "type": "string",
-            "const": "mock",
+            "enum": [
+              "mock",
+              "live",
+              "mixed"
+            ],
             "title": "Mode"
           },
           "scheduler_seconds": {
@@ -1462,7 +1502,8 @@
             "type": "string",
             "enum": [
               "vessel",
-              "flight"
+              "flight",
+              "aircraft"
             ],
             "title": "Kind"
           },
@@ -1471,6 +1512,28 @@
             "maxLength": 100,
             "minLength": 1,
             "title": "Name"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "mock-v1",
+              "digitraffic-v1",
+              "adsblol-v1"
+            ],
+            "title": "Provider",
+            "default": "mock-v1"
+          },
+          "icao24": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{6}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icao24"
           },
           "imo": {
             "anyOf": [
@@ -1642,7 +1705,8 @@
             "type": "string",
             "enum": [
               "vessel",
-              "flight"
+              "flight",
+              "aircraft"
             ],
             "title": "Kind"
           },
@@ -1835,7 +1899,8 @@
             "type": "string",
             "enum": [
               "vessel",
-              "flight"
+              "flight",
+              "aircraft"
             ],
             "title": "Kind"
           },
@@ -2124,7 +2189,8 @@
             "type": "string",
             "enum": [
               "vessel",
-              "flight"
+              "flight",
+              "aircraft"
             ],
             "title": "Kind"
           },
@@ -2164,6 +2230,28 @@
               }
             ],
             "title": "Navigation Status"
+          },
+          "callsign": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Callsign"
+          },
+          "aircraft_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aircraft Type"
           },
           "estimated_departure": {
             "anyOf": [
@@ -2291,7 +2379,14 @@
       "PollResult": {
         "properties": {
           "raw_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Raw Id"
           },
           "outcome": {
@@ -2308,7 +2403,6 @@
         },
         "type": "object",
         "required": [
-          "raw_id",
           "outcome",
           "events"
         ],
@@ -2615,6 +2709,11 @@
           "quality": {
             "type": "string",
             "title": "Quality"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider",
+            "default": "mock-v1"
           },
           "name": {
             "type": "string",

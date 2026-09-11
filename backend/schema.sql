@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS monitors(
  enabled INTEGER NOT NULL DEFAULT 1, cursor INTEGER NOT NULL DEFAULT 0,
  health TEXT NOT NULL DEFAULT 'unknown', last_poll_at TEXT, last_error TEXT,
  state TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL,
- CHECK((kind='vessel' AND asset_id IS NOT NULL AND flight_id IS NULL)
+ CHECK((kind IN ('vessel','aircraft') AND asset_id IS NOT NULL AND flight_id IS NULL)
     OR (kind='flight' AND asset_id IS NULL AND flight_id IS NOT NULL))
 );
 CREATE TABLE IF NOT EXISTS raw_records(

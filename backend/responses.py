@@ -65,7 +65,7 @@ class RawOut(BaseModel):
 class MonitorOut(BaseModel):
     id: str
     name: str
-    kind: Literal["vessel", "flight"]
+    kind: Literal["vessel", "flight", "aircraft"]
     asset_id: str | None
     flight_id: str | None
     rule_id: str
@@ -95,7 +95,7 @@ class EventOut(BaseModel):
     id: str
     monitor_id: str
     monitor_name: str
-    kind: Literal["vessel", "flight"]
+    kind: Literal["vessel", "flight", "aircraft"]
     evaluation_id: str
     rule_id: str
     type: str
@@ -120,7 +120,7 @@ class EventPage(BaseModel):
 
 
 class PollResult(BaseModel):
-    raw_id: str
+    raw_id: str | None = None
     outcome: str
     events: list[str]
 
@@ -139,6 +139,6 @@ class BatchPollResult(BaseModel):
 
 class HealthOut(BaseModel):
     status: Literal["ok"]
-    mode: Literal["mock"]
+    mode: Literal["mock", "live", "mixed"]
     scheduler_seconds: int
     engine_version: str
