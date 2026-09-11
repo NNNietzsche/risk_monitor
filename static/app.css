@@ -33,3 +33,17 @@ body:has(dialog[open]) { overflow: hidden; }
 button.timeline-link { border: 0; background: none; padding: 2px 3px; font-size: 11px; color: #6380a8; border-radius: 3px; }
 button.timeline-link:hover { background: #eff6ff; color: #2563eb; }
 @media(max-width:600px) { .timeline-shell .timeline { padding: 5px 14px; } .timeline-item { grid-template-columns: 64px 18px 1fr; gap: 9px; } .timeline-filters { gap: 6px; } }
+
+/* Compact target rows follow the original demo's identity / location layout. */
+.compact-target { display: grid; grid-template-columns: minmax(0,1fr) minmax(130px,.85fr) 10px; gap: 12px; align-items: center; padding: 14px 0; line-height: 1.5; }
+.compact-target .target-info { min-width: 0; }
+.compact-target .target-text { min-width: 0; }
+.compact-target .target-status { flex-shrink: 0; }
+.target-status.neutral { background: #9ca3af; }
+.compact-target .target-name { font-size: 13px; font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.compact-target .target-meta { font-size: 11px; margin-top: 5px; color: #8b95a4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.compact-target .target-location { min-width: 0; }
+.compact-location { font-size: 12px; color: #607087; line-height: 1.5; margin-bottom: 4px; overflow-wrap: anywhere; }
+.compact-target .chip { display: inline-block; font-size: 10px; padding: 2px 6px; }
+.target-chevron { color: #a7b2bf; font-size: 20px; }
+@media(max-width:480px) { .compact-target { grid-template-columns: minmax(0,1fr) minmax(100px,.8fr) 8px; gap: 8px; } }

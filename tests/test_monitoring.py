@@ -102,9 +102,11 @@ def test_duplicate_and_old_are_ignored(store):
 def test_event_provenance_and_reopen(store):
     m = vessel(store)
     store.poll(m["id"], "outside")
+    previous = store.detail(m["id"])["latest"]
     event_id = store.poll(m["id"], "inside")["events"][0]
     detail = Store(store.path).event_detail(event_id)
-    assert detail["previous_observation"]["data"]["longitude"] == 39
+    assert detail["previous_observation"]["id"] == previous["id"]
+    assert detail["previous_observation"]["data"] == previous["data"]
     raw = detail["raw_record"]
     assert hashlib.sha256(encoded(raw["payload"]).encode()).hexdigest() == raw["sha256"]
     assert detail["evidence"]["rule_version"] == 1

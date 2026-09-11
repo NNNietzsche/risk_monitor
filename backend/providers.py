@@ -44,6 +44,10 @@ class MockProvider:
                     lat = north + min(1, (90 - north) / 2)
             if scenario == "boundary":
                 lon = west
+            # Keep the built-in demo's regular positions at sea, while preserving
+            # its outside/inside transition and leaving custom regions untouched.
+            if target["region"]["id"] == "demo-zone" and scenario != "boundary":
+                lon, lat = (52, 12) if scenario == "outside" else (47, 12)
             data.update(latitude=lat, longitude=lon, navigation_status="under_way")
             if scenario == "missing":
                 data["latitude"] = None
