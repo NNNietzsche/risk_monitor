@@ -16,7 +16,7 @@ def timeline_assessment(row, evaluation, events):
         return result | {"tone":{"info":"normal","warning":"warning","high":"danger"}[highest], "label":{"info":"状态恢复","warning":"关注","high":"风险"}[highest], "description":"；".join(e["summary"] for e in events)}
     data = row["data"]
     if data["kind"] == "aircraft":
-        return result | {"tone":"unknown", "label":"仅位置", "description":"真实飞机定位已更新；此来源不提供计划和到达时间，未评估航班延误、取消或备降。"}
+        return result | {"tone":"unknown", "label":"仅位置", "description":"飞机定位已更新；此监控仅评估位置，未评估航班延误、取消或备降。"}
     if data["kind"] == "vessel":
         inside = evidence.get("inside")
         name = evidence.get("region", {}).get("name", "指定监控区域")

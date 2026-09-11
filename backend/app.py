@@ -12,10 +12,10 @@ from fastapi.staticfiles import StaticFiles
 from .portal import Portal, NewsCreate, AISettings, NewsOut, AIStatus, DashboardOut, SeedOut, TimelinePage
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from .responses import (RegionOut, MonitorOut, MonitorDetail, EventPage, EventDetail, PollResult, BatchPollResult, HealthOut)
+from .responses import (RegionOut, MonitorOut, MonitorDetail, EventPage, EventDetail, PollResult, BatchPollResult, HealthOut, SourceOut)
 from .models import MonitorCreate, MonitorPatch, PollRequest, RegionCreate, RuleChange, utc
 from .store import Store, NotFound, Conflict
-from .live_providers import discover, SOURCES
+
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -87,16 +87,16 @@ def create_app(db_path=None, interval=None):
 
     @app.get("/api/v1/health", response_model=HealthOut)
     def health():
-        modes = {m["provider"] != "mock-v1" for m in store.monitors() if m["enabled"]}
+        modes = {not m["source"]["is_mock"] for m in store.monitors() if m["enabled"]}
         return {"status": "ok", "mode": "mixed" if len(modes)>1 else "live" if modes == {True} else "mock", "scheduler_seconds": seconds, "engine_version": "1.0.0"}
 
     @app.get("/api/v1/public/targets")
     def public_targets():
-        return discover(store.public_http)
+        return store.registry.discover()
 
-    @app.get("/api/v1/public/sources")
+    @app.get("/api/v1/public/sources", response_model=dict[str, SourceOut])
     def public_sources():
-        return SOURCES
+        return store.registry.catalog()
 
     @app.get("/api/v1/regions", response_model=list[RegionOut])
     def regions():

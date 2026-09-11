@@ -49,7 +49,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/SourceOut"
+                  },
+                  "type": "object",
+                  "title": "Response Public Sources Api V1 Public Sources Get"
+                }
               }
             }
           }
@@ -1515,11 +1521,9 @@
           },
           "provider": {
             "type": "string",
-            "enum": [
-              "mock-v1",
-              "digitraffic-v1",
-              "adsblol-v1"
-            ],
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9_-]*$",
             "title": "Provider",
             "default": "mock-v1"
           },
@@ -1740,6 +1744,9 @@
             "type": "string",
             "title": "Provider"
           },
+          "source": {
+            "$ref": "#/components/schemas/SourceOut"
+          },
           "enabled": {
             "type": "boolean",
             "title": "Enabled"
@@ -1866,6 +1873,7 @@
           "flight_id",
           "rule_id",
           "provider",
+          "source",
           "enabled",
           "cursor",
           "health",
@@ -1933,6 +1941,9 @@
           "provider": {
             "type": "string",
             "title": "Provider"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceOut"
           },
           "enabled": {
             "type": "boolean",
@@ -2030,6 +2041,7 @@
           "flight_id",
           "rule_id",
           "provider",
+          "source",
           "enabled",
           "cursor",
           "health",
@@ -2645,6 +2657,124 @@
         ],
         "title": "SeedOut"
       },
+      "SourceOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Kinds"
+          },
+          "capabilities": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Capabilities"
+          },
+          "required_fields": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Required Fields"
+          },
+          "is_mock": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Mock"
+          },
+          "live": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "license": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License"
+          },
+          "coverage": {
+            "type": "string",
+            "title": "Coverage"
+          },
+          "min_poll_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Poll Seconds"
+          },
+          "max_age_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Age Seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "kinds",
+          "capabilities",
+          "required_fields",
+          "is_mock",
+          "live",
+          "url",
+          "license",
+          "coverage"
+        ],
+        "title": "SourceOut"
+      },
       "TimelineAssessment": {
         "properties": {
           "tone": {
@@ -2715,6 +2845,9 @@
             "title": "Provider",
             "default": "mock-v1"
           },
+          "source": {
+            "$ref": "#/components/schemas/SourceOut"
+          },
           "name": {
             "type": "string",
             "title": "Name"
@@ -2745,6 +2878,7 @@
           "observed_at",
           "data",
           "quality",
+          "source",
           "name"
         ],
         "title": "TimelineOut"

@@ -42,3 +42,6 @@ occurred_at 是触发观察时间，并非推测的真实跨界时刻。severity
 - aircraft 监控关联 asset_id，flight_id=null，没有计划时刻；对应 state 明确 flight_risk_assessed=false。Observation 可包含 callsign、aircraft_type。
 - 时间线每条返回 provider；health.mode 为 mock / live / mixed，按启用目标的数据源统计。
 - 调用限制与原始响应审计见 [公开数据接入](public-data.md)。
+
+
+数据源注册表扩展：`GET /public/sources` 的各项包含 kinds、capabilities（按类型）、required_fields（按类型）、is_mock、min_poll_seconds、max_age_seconds 和来源署名。Monitor 和 Timeline 含 source 对象；具体适配器注册与边界见 [数据源边界](provider-boundary.md)。

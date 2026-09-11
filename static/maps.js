@@ -4,6 +4,12 @@ window.RiskMaps = (() => {
   const states = new Map();
   const ns = 'http://www.w3.org/2000/svg';
   const project = (lon, lat) => [(lon + 180) * 2, (90 - lat) * 2];
+  function highlight(id, monitorId) {
+    const state=states.get(id);
+    if(!state)return false;
+    state.activeId=monitorId;
+    return state.updateHighlight?.() || false;
+  }
   const create = (tag, attrs={}, text) => {
     const n = document.createElementNS(ns, tag);
     Object.entries(attrs).forEach(([k,v]) => n.setAttribute(k,v));
@@ -32,16 +38,27 @@ window.RiskMaps = (() => {
       const historical=m.health!=='ok'||!m.enabled||['cancelled'].includes(d.flight_status);
       const danger=m.state.inside||m.state.exceeded||['cancelled','diverted'].includes(m.state.flight_status);
       const color=historical?'#7f8b99':danger?'#cb6649':'#2d70c4';
-      const marker=create('g',{tabindex:0,role:'button','aria-label':`${m.name}，${d.longitude}，${d.latitude}${historical?'，历史定位':''}`,class:'map-marker'});
+      const marker=create('g',{tabindex:0,role:'button','data-monitor-id':m.id,'aria-label':`${m.name}，${d.longitude}，${d.latitude}${historical?'，历史定位':''}`,class:'map-marker'});
       const title=create('title',{},`${m.name}\n${d.longitude}°, ${d.latitude}°\n${m.latest.observed_at}${historical?' · 历史定位':''}`);
       const dot=create('circle',{cx:0,cy:0,r:8,fill:color,stroke:'white','stroke-width':2});
       const icon=create('text',{x:0,y:3.5,'text-anchor':'middle',fill:'white','font-size':10,'pointer-events':'none'},m.kind==='vessel'?'◆':'✈');
       const label=create('text',{x:12,y:4,fill:'#29455e','font-size':10,'paint-order':'stroke',stroke:'#ffffff','stroke-width':3,'stroke-linejoin':'round','pointer-events':'none'},m.name.length>22?m.name.slice(0,22)+'…':m.name);
       if(x>580){label.setAttribute('x',-12);label.setAttribute('text-anchor','end');}
-      marker.append(title,dot,icon,label);marker.onclick=()=>openTarget(m.id);marker.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openTarget(m.id);}};
-      svg.append(marker);points.push({x,y,marker});
+      const halo=create('circle',{cx:0,cy:0,r:15,fill:'#3182ce30',stroke:'#196cc2','stroke-width':2,class:'map-highlight-ring','pointer-events':'none'});
+      marker.append(title,halo,dot,icon,label);marker.onclick=()=>openTarget(m.id);marker.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openTarget(m.id);}};
+      svg.append(marker);points.push({id:m.id,x,y,marker});
     });
-    function apply(){let [x,y,w,h]=state.view;w=Math.max(45,Math.min(720,w));h=w/2;x=Math.max(0,Math.min(720-w,x));y=Math.max(0,Math.min(360-h,y));state.view=[x,y,w,h];svg.setAttribute('viewBox',state.view.join(' '));points.forEach(p=>p.marker.setAttribute('transform',`translate(${p.x} ${p.y}) scale(${w/720})`));}
+    const hint=document.createElement('span');hint.className='map-highlight-hint';hint.hidden=true;hint.setAttribute('role','status');
+    state.updateHighlight=()=>{
+      const active=points.find(p=>p.id===state.activeId);
+      points.forEach(p=>{p.marker.classList.toggle('is-highlighted',p===active);p.marker.classList.toggle('is-dimmed',!!active&&p!==active);});
+      if(active)svg.append(active.marker);
+      const [x,y,w,h]=state.view;
+      hint.textContent=state.activeId&&!active?'该目标暂无有效定位':active&&(active.x<x||active.x>x+w||active.y<y||active.y>y+h)?'目标在当前视野外，请点击“显示全部目标”':'';
+      hint.hidden=!hint.textContent;
+      return !!active;
+    };
+    function apply(){let [x,y,w,h]=state.view;w=Math.max(45,Math.min(720,w));h=w/2;x=Math.max(0,Math.min(720-w,x));y=Math.max(0,Math.min(360-h,y));state.view=[x,y,w,h];svg.setAttribute('viewBox',state.view.join(' '));points.forEach(p=>p.marker.setAttribute('transform',`translate(${p.x} ${p.y}) scale(${w/720})`));state.updateHighlight();}
     function zoom(factor){const [x,y,w,h]=state.view,nw=Math.max(45,Math.min(720,w*factor));state.view=[x+(w-nw)/2,y+(h-nw/2)/2,nw,nw/2];apply();}
     const controls=document.createElement('div');controls.className='map-controls';
     function button(text,fn,title){const b=document.createElement('button');b.textContent=text;b.type='button';b.setAttribute('aria-label',title||text);b.onclick=fn;controls.append(b);}
@@ -52,9 +69,9 @@ window.RiskMaps = (() => {
     svg.onpointerdown=e=>{if(e.target.closest('.map-marker')||e.button!==0)return;drag={x:e.clientX,y:e.clientY,view:[...state.view]};svg.setPointerCapture(e.pointerId);};
     svg.onpointermove=e=>{if(!drag)return;const rect=svg.getBoundingClientRect(),scale=Math.min(rect.width/drag.view[2],rect.height/drag.view[3]);state.view=[drag.view[0]-(e.clientX-drag.x)/scale,drag.view[1]-(e.clientY-drag.y)/scale,drag.view[2],drag.view[3]];apply();};
     svg.onpointerup=svg.onpointercancel=()=>{drag=null;};
-    root.append(svg,controls);
+    root.append(svg,controls,hint);
     if(!points.length){const note=document.createElement('span');note.className='map-empty';note.textContent='暂无有效定位 · 采集数据后显示';root.append(note);}
     apply();
   }
-  return {draw};
+  return {draw,highlight};
 })();

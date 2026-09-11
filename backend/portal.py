@@ -8,7 +8,7 @@ import httpx
 from pydantic import Field, model_validator
 from .models import StrictModel, MonitorCreate, utc
 from .store import Conflict, encoded, stamp, uid, unpack
-from .responses import MonitorOut, EventPage, ObservationOut, EventOut
+from .responses import MonitorOut, EventPage, ObservationOut, EventOut, SourceOut
 from pydantic import BaseModel
 from typing import Literal
 from .timeline import timeline_assessment
@@ -62,6 +62,7 @@ class AIStatus(BaseModel):
 
 class TimelineOut(ObservationOut):
     provider: str = "mock-v1"
+    source: SourceOut
     name: str
     events: list[EventOut] = Field(default_factory=list)
     assessment: TimelineAssessment | None = None
@@ -187,7 +188,7 @@ class Portal:
         return self.status()
 
     def snapshot(self):
-        return {"mode": "per_monitor", "monitors": [{"id": m["id"], "name": m["name"], "kind": m["kind"], "provider": m["provider"], "is_mock": m["provider"] == "mock-v1", "enabled": m["enabled"], "health": m["health"], "state": m["state"], "rule": m["rule"], "observation": m["latest"]} for m in self.store.monitors()[:40]], "events": self.store.events(limit=20)["items"], "public_news": self.news()[:10]}
+        return {"mode": "per_monitor", "monitors": [{"id": m["id"], "name": m["name"], "kind": m["kind"], "provider": m["provider"], "is_mock": m["source"]["is_mock"], "enabled": m["enabled"], "health": m["health"], "state": m["state"], "rule": m["rule"], "observation": m["latest"]} for m in self.store.monitors()[:40]], "events": self.store.events(limit=20)["items"], "public_news": self.news()[:10]}
 
     def refresh(self, automatic=False):
         if not self.gate.acquire(blocking=False):
@@ -252,14 +253,15 @@ class Portal:
                 conditions.append("EXISTS(SELECT 1 FROM evaluations ev JOIN risk_events re ON re.evaluation_id=ev.id WHERE ev.observation_id=o.id" + event_filter + ")")
                 if severity:
                     args.append(severity)
-            source = " FROM observations o JOIN monitors m ON m.id=o.monitor_id WHERE " + " AND ".join(conditions)
+            source = " FROM observations o JOIN monitors m ON m.id=o.monitor_id JOIN raw_records rr ON rr.id=o.raw_id WHERE " + " AND ".join(conditions)
             total = db.execute("SELECT COUNT(*)" + source, args).fetchone()[0]
-            rows = db.execute("SELECT o.*,m.name,m.provider" + source + " ORDER BY o.observed_at DESC,o.id DESC LIMIT ? OFFSET ?", (*args,limit,offset)).fetchall()
+            rows = db.execute("SELECT o.*,m.name,rr.provider" + source + " ORDER BY o.observed_at DESC,o.id DESC LIMIT ? OFFSET ?", (*args,limit,offset)).fetchall()
             items = []
             for raw in rows:
                 row = unpack(raw, ("data",))
                 evaluation = unpack(db.execute("SELECT * FROM evaluations WHERE observation_id=? ORDER BY evaluated_at DESC,id DESC LIMIT 1", (row["id"],)).fetchone(), ("evidence",))
                 events = [unpack(r, ("evidence",)) for r in db.execute("SELECT re.*,m.name AS monitor_name,m.kind FROM risk_events re JOIN evaluations ev ON ev.id=re.evaluation_id JOIN monitors m ON m.id=re.monitor_id WHERE ev.observation_id=? ORDER BY re.created_at,re.id", (row["id"],))]
+                row["source"] = self.store.registry.source(row["provider"])
                 row["events"] = events
                 row["assessment"] = timeline_assessment(row, evaluation, events)
                 items.append(row)

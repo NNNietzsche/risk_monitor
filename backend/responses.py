@@ -4,6 +4,20 @@ from pydantic import BaseModel, Field
 from .models import Observation
 
 
+class SourceOut(BaseModel):
+    name: str
+    kinds: list[str]
+    capabilities: dict[str, list[str]]
+    required_fields: dict[str, list[str]]
+    is_mock: bool | None
+    live: bool | None
+    url: str | None
+    license: str | None
+    coverage: str
+    min_poll_seconds: int | None = None
+    max_age_seconds: int | None = None
+
+
 class RegionOut(BaseModel):
     id: str
     name: str
@@ -70,6 +84,7 @@ class MonitorOut(BaseModel):
     flight_id: str | None
     rule_id: str
     provider: str
+    source: SourceOut
     enabled: bool
     cursor: int
     health: str

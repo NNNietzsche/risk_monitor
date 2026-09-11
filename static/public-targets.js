@@ -11,6 +11,7 @@ async function publicTargets(){
   const test=regions.find(r=>r.name.startsWith('波罗的海测试围栏'));if(test)region.value=test.id;
   for(const item of result.items){
     const row=el('div',undefined,'list-row'),isShip=item.kind==='vessel';
+    row.append(el('p',result.sources[item.provider]?.name||item.provider,'detail-note'));
     row.append(el('strong',item.name),el('p',`${isShip?'MMSI '+item.mmsi:'ICAO24 '+item.icao24+' · 呼号 '+(item.callsign||'未提供')} · 数据时间 ${fmt(item.observed_at)} JST`));
     const add=el('button','添加并采集');
     const exists=dashboard?.monitors.some(m=>isShip?m.kind==='vessel'&&m.asset.mmsi===item.mmsi:m.kind==='aircraft'&&m.asset.registration===item.aircraft_registration);

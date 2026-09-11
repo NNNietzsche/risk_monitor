@@ -98,12 +98,12 @@
 
 <main class="container">
   <div class="page-heading"><div><div class="eyebrow">ASSET RISK MONITORING</div><h1>资产风险监控日报</h1><p class="muted">指定船舶、航班实例及公开风险信息动态监控</p></div><div class="updated">最近刷新 <span id="updated">—</span><br><span class="badge" id="data-mode">正在读取数据源</span></div></div>
-  <p class="map-note">船舶公开源：<a href="https://www.digitraffic.fi/en/marine-traffic/" target="_blank" rel="noopener noreferrer">Fintraffic / Digitraffic（CC BY 4.0）</a>，主要覆盖芬兰周边水域；飞机公开源：<a href="https://www.adsb.lol/docs/open-data/api/" target="_blank" rel="noopener noreferrer">ADSB.lol（ODbL 1.0）</a>，仅位置，不提供完整航班时刻。测试围栏不代表真实风险评级。</p><div class="toolbar"><div class="actions"><button class="primary" id="add">＋ 添加监控对象</button><button id="public-targets">接入公开数据</button><button id="seed">载入演示数据</button><button id="poll">采集一次状态</button><button id="refresh">刷新页面数据</button></div><span class="muted" id="schedule">正在读取采集设置</span></div>
+  <p class="map-note" id="source-attribution">正在读取数据源说明</p><div class="toolbar"><div class="actions"><button class="primary" id="add">＋ 添加监控对象</button><button id="public-targets">接入公开数据</button><button id="seed">载入演示数据</button><button id="poll">采集一次状态</button><button id="refresh">刷新页面数据</button></div><span class="muted" id="schedule">正在读取采集设置</span></div>
   <div id="notice" role="status" aria-live="polite"></div>
   <div class="summary-grid" id="summary"></div>
   <section class="section"><div class="section-heading"><h2>指定目标跟踪</h2><span class="muted">点击目标查看状态、规则和原始记录</span></div><div class="tracking-grid">
     <article class="panel"><div class="panel-heading"><h3>船舶跟踪</h3><span id="vessel-count" class="badge" aria-live="polite">— 艘</span></div><div id="vessel-map" class="coordinate-map" aria-label="船舶世界地图"></div><p class="map-note">离线世界底图 · 矩形为监控区域 · 支持拖动、缩放和点击目标。</p><div id="vessels" class="target-list"></div></article>
-    <article class="panel"><div class="panel-heading"><h3>航空跟踪</h3><span id="flight-count" class="badge" aria-live="polite">— 个航班</span></div><div id="flight-map" class="coordinate-map" aria-label="航空世界地图"></div><p class="map-note">飞机实体显示 ADS-B 位置，航班实例单独跟踪 · 灰色为历史定位 · 无数据不猜测位置。</p><div id="flights" class="target-list"></div></article>
+    <article class="panel"><div class="panel-heading"><h3>航空跟踪</h3><span id="flight-count" class="badge" aria-live="polite">— 个航班</span></div><div id="flight-map" class="coordinate-map" aria-label="航空世界地图"></div><p class="map-note">飞机实体显示来源提供的位置，航班实例单独跟踪 · 灰色为历史定位 · 无数据不猜测位置。</p><div id="flights" class="target-list"></div></article>
   </div></section>
   <section class="section" aria-labelledby="timeline-title">
     <div class="section-header timeline-heading">

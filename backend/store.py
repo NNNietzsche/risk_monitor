@@ -6,9 +6,10 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from .models import MonitorCreate, RegionCreate
-from .providers import MockProvider, VESSEL_SCENARIOS, FLIGHT_SCENARIOS
+from .providers import VESSEL_SCENARIOS, FLIGHT_SCENARIOS
 from .rules import ENGINE_VERSION, evaluate
-from .live_providers import PublicHTTP, DigitrafficProvider, ADSBLolProvider
+from .live_providers import PublicHTTP
+from .provider_registry import create_registry
 from .migrations import migrate_aircraft
 
 
@@ -60,7 +61,8 @@ class Store:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
         self.public_http = PublicHTTP()
-        self.providers = {"mock-v1": MockProvider(), "digitraffic-v1": DigitrafficProvider(self.public_http), "adsblol-v1": ADSBLolProvider(self.public_http)}
+        self.registry = create_registry(self.public_http)
+        self.providers = self.registry.providers
         with self.connection() as db:
             db.executescript(Path(__file__).with_name("schema.sql").read_text(encoding="utf-8"))
             db.execute("INSERT OR IGNORE INTO schema_versions VALUES (1,?)", (stamp(),))
@@ -82,6 +84,7 @@ class Store:
         m = unpack(db.execute("SELECT * FROM monitors WHERE id=?", (monitor_id,)).fetchone(), ("state",))
         if not m:
             raise NotFound("监控对象不存在")
+        m["source"] = self.registry.source(m["provider"])
         m["enabled"] = bool(m["enabled"])
         m["rule"] = unpack(db.execute("SELECT * FROM rule_versions WHERE id=?", (m["rule_id"],)).fetchone(), ("config",))
         m["asset"] = unpack(db.execute("SELECT * FROM assets WHERE id=?", (m["asset_id"],)).fetchone())
@@ -120,11 +123,12 @@ class Store:
         return next(r for r in self.regions() if r["id"] == region_id)
 
     def create_monitor(self, request: MonitorCreate):
+        spec = self.registry.validate(request)
         m_id, rule_id = uid(), uid()
         asset_id = flight_id = None
-        config = {"max_age_seconds": 120 if request.kind == "aircraft" else 900}
-        if request.provider != "mock-v1":
-            config["min_poll_seconds"] = 60
+        config = {"max_age_seconds": spec["max_age_seconds"]}
+        if spec["min_poll_seconds"]:
+            config["min_poll_seconds"] = spec["min_poll_seconds"]
         try:
             with self.lock, self.connection() as db:
                 db.execute("BEGIN IMMEDIATE")
@@ -195,12 +199,12 @@ class Store:
                 m = self._target(db, monitor_id)
             if not m["enabled"]:
                 raise Conflict("该监控已暂停")
-            if m["provider"] != "mock-v1":
+            if not m["source"]["is_mock"]:
                 if scenario != "sequence":
                     raise ValueError("真实数据源不支持模拟场景")
                 if m["last_poll_at"] and (datetime.now(timezone.utc)-datetime.fromisoformat(m["last_poll_at"])).total_seconds() < m["rule"]["config"].get("min_poll_seconds",60):
                     return {"raw_id":None,"outcome":"throttled","events":[]}
-            allowed = {"sequence"} if m["provider"] != "mock-v1" else VESSEL_SCENARIOS if m["kind"] == "vessel" else FLIGHT_SCENARIOS
+            allowed = {"sequence"} if not m["source"]["is_mock"] else VESSEL_SCENARIOS if m["kind"] == "vessel" else FLIGHT_SCENARIOS
             if scenario not in allowed:
                 raise ValueError("此场景不适用于该监控类型")
             now, raw_id = datetime.now(timezone.utc), uid()
@@ -209,7 +213,7 @@ class Store:
             try:
                 payload = provider.fetch(m, scenario, now)
             except (TimeoutError, ConnectionError, ValueError) as exc:
-                payload, error = getattr(exc, "payload", {"scenario": scenario, "error": str(exc), "mock": m["provider"] == "mock-v1"}), str(exc)
+                payload, error = getattr(exc, "payload", {"scenario": scenario, "error": str(exc), "mock": m["source"]["is_mock"]}), str(exc)
             body = encoded(payload)
             # Commit original data before any normalization or risk evaluation.
             with self.connection() as db:
@@ -223,6 +227,8 @@ class Store:
                 return {"raw_id": raw_id, "outcome": "fetch_error", "events": []}
             try:
                 observation = provider.normalize(payload, m)
+                if observation.kind != m["kind"]:
+                    raise ValueError("标准化结果的资产类型与监控对象不一致")
                 data = observation.model_dump(mode="json")
                 observed_at = observation.observed_at.isoformat()
             except (ValueError, KeyError, TypeError) as exc:

@@ -17,7 +17,7 @@ def utc(value: datetime) -> datetime:
 class MonitorCreate(StrictModel):
     kind: Literal["vessel", "flight", "aircraft"]
     name: str = Field(min_length=1, max_length=100)
-    provider: Literal["mock-v1", "digitraffic-v1", "adsblol-v1"] = "mock-v1"
+    provider: str = Field(default="mock-v1", min_length=1, max_length=80, pattern=r"^[a-z0-9][a-z0-9_-]*$")
     icao24: str | None = Field(default=None, pattern=r"^[0-9a-f]{6}$")
     imo: str | None = Field(default=None, pattern=r"^\d{7}$")
     mmsi: str | None = Field(default=None, pattern=r"^\d{9}$")
@@ -36,13 +36,9 @@ class MonitorCreate(StrictModel):
     @model_validator(mode="after")
     def validate_business(self):
         flight_fields = ("carrier", "flight_number", "service_date", "departure", "arrival", "scheduled_departure", "scheduled_arrival")
-        if self.provider == "digitraffic-v1" and (self.kind != "vessel" or not self.mmsi):
-            raise ValueError("Digitraffic 仅支持有 MMSI 的船舶")
-        if self.provider == "adsblol-v1" and self.kind != "aircraft":
-            raise ValueError("ADSB.lol 仅提供飞机实体位置")
         if self.kind == "aircraft":
-            if self.provider != "adsblol-v1" or not self.icao24 or not self.aircraft_registration:
-                raise ValueError("飞机位置监控需要 ADSB.lol、ICAO24 和注册号")
+            if not self.aircraft_registration:
+                raise ValueError("飞机实体需要注册号")
             if any(getattr(self, key) is not None for key in (*flight_fields, "imo", "mmsi", "region_id")):
                 raise ValueError("飞机实体不能包含具体航班或船舶字段")
             return self

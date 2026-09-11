@@ -8,7 +8,7 @@ def evaluate(target, observation):
     evidence = {"current": observation, "previous_observation_id": (target.get("latest") or {}).get("id"),
                 "previous_state": previous, "rule_config": config, "engine_version": ENGINE_VERSION,
                 "operator": ">" if target["kind"] == "flight" else "boundary_inclusive",
-                "data_source": target["provider"], "is_mock": target["provider"] == "mock-v1"}
+                "data_source": target["provider"], "is_mock": target["source"]["is_mock"]}
     events = []
     if target["kind"] == "vessel":
         lat, lon = observation.get("latitude"), observation.get("longitude")

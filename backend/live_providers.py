@@ -10,11 +10,6 @@ from email.utils import parsedate_to_datetime
 import httpx
 from .models import Observation
 
-SOURCES = {
-    "mock-v1": {"name":"模拟数据", "url":None, "license":None, "live":False},
-    "digitraffic-v1": {"name":"Digitraffic / Fintraffic", "url":"https://www.digitraffic.fi/en/marine-traffic/", "license":"CC BY 4.0", "live":True},
-    "adsblol-v1": {"name":"ADSB.lol", "url":"https://www.adsb.lol/docs/open-data/api/", "license":"ODbL 1.0", "live":True},
-}
 
 
 class FetchError(ValueError):
@@ -128,7 +123,7 @@ class ADSBLolProvider:
                            callsign=str(a.get("flight","")).strip()[:20] or None,aircraft_type=str(a.get("t","")).strip()[:20] or None)
 
 
-def discover(http):
+def discover_vessels(http):
     items,errors=[],[]
     now=datetime.now(timezone.utc)
     try:
@@ -153,6 +148,12 @@ def discover(http):
             errors.append("Digitraffic 暂无最近 10 分钟的船舶位置")
     except (FetchError,KeyError,TypeError,ValueError):
         errors.append("Digitraffic 暂时不可用")
+    return {"items":items,"errors":errors}
+
+
+def discover_aircraft(http):
+    items,errors=[],[]
+    now=datetime.now(timezone.utc)
     try:
         payload=http.get("https://api.adsb.lol/v2/lat/35.55/lon/139.78/dist/100",ttl=120)
         count=0
@@ -168,4 +169,4 @@ def discover(http):
         if not count:errors.append("东京附近暂时没有可用飞机位置")
     except (FetchError,KeyError,TypeError,ValueError):
         errors.append("ADSB.lol 暂时不可用")
-    return {"items":items,"errors":errors,"sources":SOURCES}
+    return {"items":items,"errors":errors}

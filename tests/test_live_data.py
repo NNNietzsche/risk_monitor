@@ -108,9 +108,10 @@ def test_existing_database_migration_retains_audit_and_events(tmp_path):
     assert Path(str(path)+'.before-aircraft.bak').exists()
 
 
-def test_provider_capability_validation():
-    with pytest.raises(ValidationError):MonitorCreate(kind='vessel',provider='digitraffic-v1',name='No MMSI',imo='9074729',region_id='demo-zone')
-    with pytest.raises(ValidationError):MonitorCreate(kind='aircraft',provider='mock-v1',name='Wrong source',aircraft_registration='JA123A',icao24='abcdef')
+def test_provider_capability_validation(tmp_path):
+    store=Store(tmp_path/'validation.db')
+    with pytest.raises(ValueError):store.create_monitor(MonitorCreate(kind='vessel',provider='digitraffic-v1',name='No MMSI',imo='9074729',region_id='demo-zone'))
+    with pytest.raises(ValueError):store.create_monitor(MonitorCreate(kind='aircraft',provider='mock-v1',name='Wrong source',aircraft_registration='JA123A',icao24='abcdef'))
 
 
 def test_valid_duplicate_recovers_health_without_repeating_event(tmp_path):

@@ -47,3 +47,9 @@ button.timeline-link:hover { background: #eff6ff; color: #2563eb; }
 .compact-target .chip { display: inline-block; font-size: 10px; padding: 2px 6px; }
 .target-chevron { color: #a7b2bf; font-size: 20px; }
 @media(max-width:480px) { .compact-target { grid-template-columns: minmax(0,1fr) minmax(100px,.8fr) 8px; gap: 8px; } }
+.map-highlight-ring { display: none; }
+.map-marker.is-highlighted .map-highlight-ring { display: initial; }
+.map-marker.is-highlighted text { font-weight: 700; }
+.map-marker.is-dimmed { opacity: .3; }
+.map-highlight-hint { position: absolute; left: 12px; bottom: 12px; max-width: calc(100% - 24px); padding: 6px 10px; border-radius: 6px; background: #ffffffed; color: #36536e; font-size: 12px; pointer-events: none; }
+.compact-target:hover, .compact-target:focus-visible { background: #edf5ff; }
