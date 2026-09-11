@@ -9,7 +9,7 @@ from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from .portal import Portal, NewsCreate, AISettings, NewsOut, AIStatus, DashboardOut, SeedOut
+from .portal import Portal, NewsCreate, AISettings, NewsOut, AIStatus, DashboardOut, SeedOut, TimelinePage
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from .responses import (RegionOut, MonitorOut, MonitorDetail, EventPage, EventDetail, PollResult, BatchPollResult, HealthOut)
@@ -141,6 +141,11 @@ def create_app(db_path=None, interval=None):
     @app.get("/api/v1/dashboard", response_model=DashboardOut)
     def dashboard():
         return portal.dashboard()
+
+    @app.get("/api/v1/timeline", response_model=TimelinePage)
+    def timeline(limit: int = Query(default=10, ge=1, le=100), offset: int = Query(default=0, ge=0),
+                 snapshot: int | None = Query(default=None, ge=0)):
+        return portal.timeline(limit, offset, snapshot)
 
     @app.post("/api/v1/demo/seed", response_model=SeedOut)
     def seed_demo():

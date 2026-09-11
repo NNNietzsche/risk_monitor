@@ -5,6 +5,7 @@ const fmt = value => value ? new Intl.DateTimeFormat('zh-CN', {timeZone:'Asia/To
 const healthLabel = {ok:'数据有效',unknown:'尚无有效数据',stale:'数据过期',missing:'字段缺失',error:'采集失败',invalid:'数据无效'};
 const severityLabel = {high:'高风险',warning:'关注',info:'信息'};
 let dashboard = null, offset = 0, loading = false;
+let timelineOffset = 0, timelineSnapshot = null, timelineRequest = 0;
 async function api(path, method='GET', body) {
   const r = await fetch('/api/v1' + path, {method, headers:body === undefined ? {} : {'Content-Type':'application/json'}, body:body === undefined ? undefined : JSON.stringify(body)});
   const value = await r.json();
@@ -36,25 +37,28 @@ function renderMonitors(items) {
     list.forEach(m=>{const b=el('button',undefined,'monitor-target'), head=el('div',undefined,'row-head');head.append(el('strong',m.name),chip(...risk(m)));b.append(head);
       if(m.kind==='vessel'){const d=m.latest?.data;b.append(el('p',`IMO ${m.asset?.imo || '—'} · MMSI ${m.asset?.mmsi || '—'}`),el('p',d ? `经纬度 ${d.longitude ?? '—'}°, ${d.latitude ?? '—'}° · ${d.navigation_status==='under_way'?'航行中':d.navigation_status||'航行状态未知'}`:'尚无有效定位'),el('p',m.region?.name));}
       else{b.append(el('p',`${m.flight.carrier}${m.flight.flight_number} · ${m.flight.service_date} · ${m.flight.departure} → ${m.flight.arrival}`),el('p',`计划起飞 ${fmt(m.flight.scheduled_departure)} · 预计 ${fmt(m.latest?.data.estimated_departure)}`),el('p',`${m.rule.config.delay_basis==='departure'?'起飞':'到达'}延误 > ${m.rule.config.threshold_minutes} 分钟触发 · 飞机实体 ${m.flight.aircraft_id ? '已关联' : '未关联'}`));}
+      if(m.kind==='flight'){const d=m.latest?.data;b.append(el('p',d?.longitude!=null&&d?.latitude!=null?`模拟定位 ${d.longitude}°, ${d.latitude}°${m.health!=='ok'?'（历史数据）':''}`:'暂无定位；可采集一次模拟状态。'));}
       b.append(el('p',`数据时间 ${fmt(m.latest?.observed_at)} · ${healthLabel[m.health]||m.health}`));b.onclick=()=>action(()=>showMonitor(m.id));box.append(b);
     });
   }
-  renderMap(ships);
-}
-function renderMap(ships) {
-  const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 720 300');svg.setAttribute('role','img');svg.setAttribute('aria-label','船舶在全球经纬度网格上的位置，矩形表示监控区域');
-  const shape=(tag,attrs,text)=>{const n=document.createElementNS(ns,tag);Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,v));if(text)n.textContent=text;svg.append(n);return n;};
-  const x=lon=>(lon+180)*2, y=lat=>(90-lat)*1.66;
-  for(let lon=-180;lon<=180;lon+=60){shape('line',{x1:x(lon),x2:x(lon),y1:0,y2:300,stroke:'#d4e2ed'});shape('text',{x:Math.min(x(lon)+4,680),y:290,fill:'#8ba2b9','font-size':11},lon+'°');}
-  for(let lat=-60;lat<=60;lat+=30)shape('line',{x1:0,x2:720,y1:y(lat),y2:y(lat),stroke:'#d4e2ed'});
-  const regions=new Map(ships.filter(m=>m.region).map(m=>[m.region.id,m.region]));
-  regions.forEach(r=>{const [w,s,e,n]=r.geometry.bbox;shape('rect',{x:x(w),y:y(n),width:(e-w)*2,height:(n-s)*1.66,fill:'#e8a76344',stroke:'#cf925c'});});
-  ships.forEach(m=>{const d=m.latest?.data;if(d?.longitude==null||d?.latitude==null)return;const dot=shape('circle',{cx:x(d.longitude),cy:y(d.latitude),r:5,fill:m.health!=='ok'?'#929dad':m.state.inside?'#dd684f':'#387ad4'});const title=document.createElementNS(ns,'title');title.textContent=`${m.name}：${d.longitude}, ${d.latitude}；${fmt(m.latest.observed_at)}`;dot.append(title);});
-  $('vessel-map').replaceChildren(svg);
+  RiskMaps.draw('vessel-map',ships,id=>action(()=>showMonitor(id)));
+  RiskMaps.draw('flight-map',flights,id=>action(()=>showMonitor(id)));
 }
 function renderTimeline(rows) {
   const box=$('timeline');box.replaceChildren();if(!rows.length)empty(box,'采集状态后将在此记录目标动态。');
   rows.forEach(r=>{const row=el('div',undefined,'timeline-row'),body=el('div');body.append(el('strong',r.name+' · 状态采集'),el('p',r.quality==='evaluated' ? (r.data.kind==='vessel'?`定位 ${r.data.longitude}, ${r.data.latitude}`:'航班时间及状态已更新') : `数据质量：${r.quality}，未据此推断安全状态`));row.append(el('span',fmt(r.observed_at),'time'),el('span',undefined,'timeline-dot'),body);box.append(row);});
+}
+async function loadTimeline(resetSnapshot=false) {
+  const request = ++timelineRequest;
+  const params = new URLSearchParams({limit:10,offset:timelineOffset});
+  if (timelineSnapshot !== null && !resetSnapshot) params.set('snapshot',timelineSnapshot);
+  const page = await api('/timeline?'+params);
+  if (request !== timelineRequest) return;
+  timelineSnapshot = page.snapshot;
+  renderTimeline(page.items);
+  $('timeline-page').textContent = `第 ${Math.floor(page.offset/10)+1} / ${Math.max(1,Math.ceil(page.total/10))} 页 · 共 ${page.total} 条${page.offset?' · 历史快照':''}`;
+  $('timeline-prev').disabled = page.offset === 0;
+  $('timeline-next').disabled = page.offset + page.limit >= page.total;
 }
 async function loadEvents() {
   const params=new URLSearchParams({limit:10,offset});if($('event-kind').value)params.set('kind',$('event-kind').value);if($('event-severity').value)params.set('severity',$('event-severity').value);
@@ -68,13 +72,14 @@ function renderAI(s){$('ai-enabled').checked=s.enabled;$('ai-auto').checked=s.au
   $('ai-meta').textContent=s.analysis?`生成于 ${fmt(s.analysis.created_at)} · ${s.analysis.model} · ${s.analysis.prompt_version} · 依据最近最多 40 个目标、20 条规则事件和 10 条公开信息；之后的数据变化尚不一定包含在内。`:'服务端配置 AI_API_KEY、AI_MODEL 后重启，即可启用。AI 不负责采集数据或判定风险。';
   $('ai-content').textContent=s.analysis?.content||'暂无 AI 分析。规则事件、时间线和公开信息无需 AI 即可呈现。';
 }
-async function refresh(){if(loading)return;loading=true;try{dashboard=await api('/dashboard');renderMonitors(dashboard.monitors);renderTimeline(dashboard.timeline);renderNews(dashboard.news);renderAI(dashboard.ai);await loadEvents();$('updated').textContent=fmt(dashboard.updated_at)+' JST';$('system-status').textContent=dashboard.monitors.some(m=>m.enabled&&m.health!=='ok')?'数据待关注':'监控服务已连接';}catch(e){$('system-status').textContent='服务连接失败';throw e;}finally{loading=false;}}
-function openDialog(title){$('dialog-title').textContent=title;$('dialog-body').replaceChildren();$('dialog-error').textContent='';if(!$('dialog').open)$('dialog').showModal();}
+async function refresh(){if(loading)return;loading=true;try{dashboard=await api('/dashboard');renderMonitors(dashboard.monitors);await loadTimeline(timelineOffset===0);renderNews(dashboard.news);renderAI(dashboard.ai);await loadEvents();$('updated').textContent=fmt(dashboard.updated_at)+' JST';$('system-status').textContent=dashboard.monitors.some(m=>m.enabled&&m.health!=='ok')?'数据待关注':'监控服务已连接';}catch(e){$('system-status').textContent='服务连接失败';throw e;}finally{loading=false;}}
+function openDialog(title){$('dialog-title').textContent=title;$('dialog-body').replaceChildren();$('dialog-error').textContent='';if(!$('dialog').open)$('dialog').showModal();$('dialog').scrollTop=0;}
 function jsonDetails(title,data,opened=false){const d=el('details');d.open=opened;d.append(el('summary',title),el('pre',JSON.stringify(data,null,2)));$('dialog-body').append(d);}
 function field(form,label,name,type='text',value='',required=true){const l=el('label',undefined,'field'),input=el(type==='textarea'?'textarea':'input');l.append(el('span',label));input.name=name;if(type!=='textarea')input.type=type;input.value=value;input.required=required;l.append(input);form.append(l);return input;}
 function select(form,label,name,options){const l=el('label',undefined,'field'),s=el('select');s.name=name;options.forEach(([value,text])=>{const o=el('option',text);o.value=value;s.append(o);});l.append(el('span',label),s);form.append(l);return s;}
 function submit(form,text,handler){const b=el('button',text,'primary');b.type='submit';const a=el('div',undefined,'actions');a.append(b);form.append(a);form.onsubmit=e=>{e.preventDefault();action(()=>handler(new FormData(form)),b);};}
 async function showMonitor(id){const m=await api('/monitors/'+id);openDialog(m.name);const box=$('dialog-body');box.append(el('p',`${risk(m)[0]} · ${healthLabel[m.health]||m.health} · 数据时间 ${fmt(m.latest?.observed_at)} · 规则 v${m.rule.version}`,'detail-note'));
+  const position=m.latest?.data;box.append(el('p',position?.longitude!=null&&position?.latitude!=null?`模拟位置：经度 ${position.longitude}°，纬度 ${position.latitude}°${m.health!=='ok'?'（历史定位）':''}`:'暂无定位数据','detail-note'));
   if(m.kind==='flight'){const table=el('table'),head=el('tr');['时间（JST）','计划','预计','实际'].forEach(t=>head.append(el('th',t)));table.append(head);for(const [key,label] of [['departure','起飞'],['arrival','到达']]){const tr=el('tr');[label,fmt(m.flight['scheduled_'+key]),fmt(m.latest?.data['estimated_'+key]),fmt(m.latest?.data['actual_'+key])].forEach(t=>tr.append(el('td',t)));table.append(tr);}box.append(table,el('p',`航班实例 ${m.flight.id}；飞机实体 ${m.flight.aircraft_id||'未关联'}。服务日期 ${m.flight.service_date}。`,'detail-note'));}
   const controls=el('div',undefined,'actions'),pause=el('button',m.enabled?'暂停监控':'恢复监控');pause.onclick=()=>action(async()=>{await api('/monitors/'+id,'PATCH',{enabled:!m.enabled});await refresh();await showMonitor(id);},pause);controls.append(pause);const scenarios=m.kind==='vessel'?[['outside','区域外'],['inside','区域内'],['boundary','区域边界']]:[['on_time','准点'],['delayed','延误超阈值'],['recovered','延误恢复'],['cancelled','取消'],['diverted','备降'],['actual','实际时间优先']];scenarios.push(['missing','字段缺失'],['stale','数据过期'],['failure','采集失败'],['duplicate','重复数据']);const scenario=el('select');scenario.setAttribute('aria-label','模拟状态');scenarios.forEach(([v,t])=>{const o=el('option',t);o.value=v;scenario.append(o);});const poll=el('button','采集所选状态');poll.disabled=!m.enabled;poll.onclick=()=>action(async()=>{const r=await api('/monitors/'+id+'/poll','POST',{scenario:scenario.value});await refresh();await showMonitor(id);$('dialog-error').textContent='采集结果：'+r.outcome;},poll);controls.append(scenario,poll);box.append(controls);
   if(m.kind==='flight'){const f=el('form'),grid=el('div',undefined,'form-grid');field(grid,'延误阈值（分钟）','threshold_minutes','number',m.rule.config.threshold_minutes);const basis=select(grid,'比较时间','delay_basis',[['departure','起飞'],['arrival','到达']]);basis.value=m.rule.config.delay_basis;f.append(grid);submit(f,'保存为新规则版本',async data=>{await api('/monitors/'+id+'/rule-versions','POST',{threshold_minutes:Number(data.get('threshold_minutes')),delay_basis:data.get('delay_basis')});await refresh();await showMonitor(id);});box.append(f);}
@@ -88,6 +93,9 @@ $('close-dialog').onclick=()=>$('dialog').close();$('add').onclick=()=>action(ad
 for(const [id,path] of [['seed','/demo/seed'],['poll','/poll']])$(id).onclick=()=>action(async()=>{await api(path,'POST');await refresh();},$(id));
 $('refresh').onclick=()=>action(refresh,$('refresh'));
 for(const id of ['event-kind','event-severity'])$(id).onchange=()=>{offset=0;action(loadEvents);};
+$('timeline-prev').onclick=()=>{timelineOffset=Math.max(0,timelineOffset-10);action(loadTimeline);};
+$('timeline-next').onclick=()=>{timelineOffset+=10;action(loadTimeline);};
+$('timeline-latest').onclick=()=>{timelineOffset=0;timelineSnapshot=null;action(loadTimeline);};
 $('event-prev').onclick=()=>{offset=Math.max(0,offset-10);action(loadEvents);};$('event-next').onclick=()=>{offset+=10;action(loadEvents);};
 for(const id of ['ai-enabled','ai-auto'])$(id).onchange=()=>action(async()=>{try{renderAI(await api('/ai/settings','PATCH',{enabled:$('ai-enabled').checked,auto_refresh:$('ai-auto').checked}));}catch(e){renderAI(await api('/ai/status'));throw e;}});
 $('ai-refresh').onclick=()=>action(async()=>{renderAI(await api('/ai/refresh','POST'));},$('ai-refresh'));

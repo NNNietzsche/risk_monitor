@@ -55,6 +55,14 @@ class TimelineOut(ObservationOut):
     name: str
 
 
+class TimelinePage(BaseModel):
+    items: list[TimelineOut]
+    total: int
+    limit: int
+    offset: int
+    snapshot: int
+
+
 class DashboardOut(BaseModel):
     updated_at: str
     monitors: list[MonitorOut]
@@ -214,8 +222,17 @@ class Portal:
         finally:
             self.gate.release()
 
+    def timeline(self, limit=10, offset=0, snapshot=None):
+        with self.store.connection() as db:
+            # Freeze the set of rows while paging so concurrent polling cannot shift pages.
+            db.execute("BEGIN")
+            if snapshot is None:
+                snapshot = db.execute("SELECT COALESCE(MAX(rowid),0) FROM observations").fetchone()[0]
+            total = db.execute("SELECT COUNT(*) FROM observations WHERE rowid<=?", (snapshot,)).fetchone()[0]
+            rows = db.execute("SELECT o.*,m.name FROM observations o JOIN monitors m ON m.id=o.monitor_id WHERE o.rowid<=? ORDER BY o.observed_at DESC,o.id DESC LIMIT ? OFFSET ?", (snapshot,limit,offset))
+            return {"items": [unpack(r, ("data",)) for r in rows], "total": total, "limit": limit, "offset": offset, "snapshot": snapshot}
+
     def dashboard(self):
         monitors = self.store.monitors()
-        with self.store.connection() as db:
-            timeline = [unpack(r, ("data",)) for r in db.execute("SELECT o.*,m.name FROM observations o JOIN monitors m ON m.id=o.monitor_id ORDER BY observed_at DESC LIMIT 30")]
+        timeline = self.timeline()["items"]
         return {"updated_at": stamp(), "monitors": monitors, "events": self.store.events(limit=100), "timeline": timeline, "news": self.news(), "ai": self.status()}

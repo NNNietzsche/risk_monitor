@@ -7,3 +7,7 @@
 本轮 32 项 pytest 通过。JavaScript 通过 Node 语法检查，页面入口 HTTP 200。无浏览器点击或截图验收；真实 AIS、航班和 AI 账号尚未接入。AI 测试使用本地 MockTransport，不发送数据到外部服务。
 
 测试有两项依赖弃用提示（httpx TestClient 与 AnyIO 接口），不影响当前结果。数据与虚拟环境已排除 Git。
+
+## 地图与时间线修订
+
+2026-09-11：全套 34 项 pytest 通过，新增航空模拟位置、取消/缺失/未知航段处理，以及采集过程中时间线快照分页不重不漏的检查。两个 JavaScript 文件语法检查通过。弹窗显式设置 fixed / inset / margin:auto，修复全局 margin:0 导致的左上角定位；地图使用本地 Natural Earth SVG 底图。未执行浏览器截图或点击验收。

@@ -2,11 +2,11 @@
 
 页面入口 `/asset-risk.html`（`/demo.html` 别名）；`/` 重定向到页面。导航保持 `index.html`、`daily-news.html`、`asset-risk.html`、`entity-assessment.html`、`deep-reports.html`、`intl-ratings.html`。宿主应映射这些现有页面路径；本模块不提供其余页面。
 
-前端使用原生 HTML/CSS/JS，静态资源 `/static/*`，API 前缀 `/api/v1`。接入现有布局时可使用 demo.html 的 main 和这两个样式文件、一个脚本，也可按相同契约在宿主框架重写组件。部署子路径时需统一调整 API 与静态资源前缀，不修改导航业务目标。
+前端使用原生 HTML/CSS/JS，静态资源 `/static/*`，API 前缀 `/api/v1`。接入现有布局时可使用 demo.html 的 main 和这两个样式文件、页面与地图脚本，也可按相同契约在宿主框架重写组件。部署子路径时需统一调整 API 与静态资源前缀，不修改导航业务目标。
 
 | 接口 | 用途 |
 |---|---|
-| GET /dashboard | updated_at、monitors、events（最近100条）、timeline（最近30条）、news（最近100条）、ai |
+| GET /dashboard | updated_at、monitors、events（最近100条）、timeline（最近10条）、news（最近100条）、ai |
 | POST /demo/seed | 仅空目标库创建演示目标；无公开信息时创建样例；不覆盖已有数据 |
 | GET /news | 按发布时间倒序，最多100条 |
 | POST /news | title、content、source、source_url、published_at（含时区）、category、is_mock（默认false） |
@@ -21,3 +21,10 @@ AI settings 默认关闭并持久化；分析不会改变 monitor、evaluation �
 接入真实 Provider 先完成字段映射、实体匹配、时间口径、授权存储和更新周期，再用同一套缺失/重复/过期测试验收。不要将真实数据适配器的异常静默替换为 Mock。
 
 当前公开信息为手动录入和结构化接口导入；新闻抓取、关联检索及自动分类由现有系统提供。报告系统可读取 events 与 news；AI 成功分析作为可选附录，并带生成时间、模型及输入范围。未连接宿主系统和真实数据服务，导航不可访问属于当前本地环境的预期限制。
+
+
+## 动态时间线分页
+
+`GET /api/v1/timeline?limit=10&offset=0` 返回 `{items,total,limit,offset,snapshot}`。后续页面带回相同 snapshot，例如 `?limit=10&offset=10&snapshot=123`。snapshot 是这一轮翻页时的观测记录上限，自动采集新增记录不会导致历史翻页重复或漏行。按 observed_at DESC、id DESC 稳定排序；点击“回到最新”会开始新的快照。首页自动刷新；浏览历史页时保持快照。
+
+Dashboard 仍返回最新10条的 timeline 数组，页面使用独立分页接口；分页参数无效返回422。地图使用已有 Observation.latitude/longitude，字段为空时不显示新的定位点。

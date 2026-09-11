@@ -53,14 +53,26 @@ class MockProvider:
             delay = target["rule"]["config"]["threshold_minutes"] + 20 if scenario == "delayed" else 0
             data.update(estimated_departure=(departure + timedelta(minutes=delay)).isoformat(),
                         estimated_arrival=(arrival + timedelta(minutes=delay)).isoformat(), flight_status="scheduled")
+            # Fictional demo positions, independent of schedule/delay calculations.
+            # Unsupported routes deliberately have no position rather than a guessed location.
+            route = (target["flight"]["departure"], target["flight"]["arrival"])
+            points = [(139.7,35.6), (137,35.2), (134,34.2), (131,33), (128,31.8), (125,31.3), (121.8,31.2)]
+            if route in {("HND", "PVG"), ("PVG", "HND")}:
+                if route[0] == "PVG":
+                    points.reverse()
+                lon, lat = points[-1] if scenario == "actual" else points[target["cursor"] % len(points)]
+                data.update(longitude=lon, latitude=lat, flight_status="active")
             if scenario in {"cancelled", "diverted"}:
                 data["flight_status"] = scenario
+                if scenario == "cancelled":
+                    data["latitude"] = data["longitude"] = None
             if scenario == "actual":
                 data.update(actual_departure=(departure + timedelta(minutes=90)).isoformat(),
                             estimated_departure=(departure + timedelta(minutes=20)).isoformat(),
                             actual_arrival=(arrival + timedelta(minutes=90)).isoformat(), flight_status="landed")
             if scenario == "missing":
                 data["estimated_departure"] = data["estimated_arrival"] = None
+                data["latitude"] = data["longitude"] = None
         return {"mock": True, "target_id": target["id"], "observation": data}
 
     def normalize(self, payload, target):
