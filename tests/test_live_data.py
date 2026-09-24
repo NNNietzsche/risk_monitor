@@ -30,6 +30,7 @@ def test_live_vessel_event_preserves_source_response_and_throttles(tmp_path):
     calls=[]
     def handler(request):
         calls.append(request)
+        if '/vessels/' in request.url.path:return httpx.Response(200,json={'mmsi':230991780,'shipType':70})
         assert request.url.params['mmsi']=='230991780'
         return httpx.Response(200,json=body)
     store.providers['digitraffic-v1']=DigitrafficProvider(PublicHTTP(httpx.MockTransport(handler)))
@@ -38,7 +39,7 @@ def test_live_vessel_event_preserves_source_response_and_throttles(tmp_path):
     event=store.event_detail(result['events'][0]);assert event['evidence']['is_mock'] is False
     raw=event['raw_record'];assert raw['provider']=='digitraffic-v1'
     assert json.loads(base64.b64decode(raw['payload']['response_bytes_base64']))==body
-    assert store.poll(target['id'])['outcome']=='throttled' and len(calls)==1
+    assert store.poll(target['id'])['outcome']=='throttled' and len(calls)==2
     with pytest.raises(ValueError):store.poll(target['id'],'inside')
 
 

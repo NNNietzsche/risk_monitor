@@ -29,3 +29,23 @@ def migrate_aircraft(path):
         raise
     finally:
         db.close()
+
+
+def migrate_management(path):
+    db=sqlite3.connect(path,timeout=15)
+    try:
+        if db.execute('SELECT 1 FROM schema_versions WHERE version=4').fetchone():return
+        backup=Path(str(path)+'.before-management.bak')
+        if not backup.exists():
+            with sqlite3.connect(backup) as copy:db.backup(copy)
+        db.execute('BEGIN IMMEDIATE')
+        for table,column,kind in [('monitors','deleted_at','TEXT'),('monitors','profile',"TEXT NOT NULL DEFAULT '{}'"),('regions','deleted_at','TEXT')]:
+            columns={r[1] for r in db.execute('PRAGMA table_info('+table+')')}
+            if column not in columns:db.execute(f'ALTER TABLE {table} ADD COLUMN {column} {kind}')
+        db.execute('CREATE TABLE IF NOT EXISTS region_audit(id TEXT PRIMARY KEY,region_id TEXT NOT NULL REFERENCES regions(id),action TEXT NOT NULL,before_value TEXT NOT NULL,after_value TEXT NOT NULL,created_at TEXT NOT NULL)')
+        db.execute('INSERT INTO schema_versions VALUES(4,?)',(datetime.now(timezone.utc).isoformat(),))
+        db.commit()
+    except Exception:
+        db.rollback();raise
+    finally:
+        db.close()

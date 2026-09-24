@@ -13,8 +13,9 @@ from .portal import Portal, NewsCreate, AISettings, NewsOut, AIStatus, Dashboard
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from .responses import (RegionOut, MonitorOut, MonitorDetail, EventPage, EventDetail, PollResult, BatchPollResult, HealthOut, SourceOut)
-from .models import MonitorCreate, MonitorPatch, PollRequest, RegionCreate, RuleChange, utc
+from .models import MonitorCreate, MonitorPatch, PollRequest, RegionCreate, RuleChange, BusinessProfile, utc
 from .store import Store, NotFound, Conflict
+from .management import update_profile, remove_monitor, restore_monitor, change_region_deleted
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -23,7 +24,7 @@ ROOT = Path(__file__).resolve().parent.parent
 def create_app(db_path=None, interval=None):
     store = Store(db_path or os.getenv("RISK_DB_PATH", str(ROOT / "data" / "risk.db")))
     portal = Portal(store)
-    seconds = int(os.getenv("RISK_POLL_SECONDS", "0")) if interval is None else interval
+    seconds = int(os.getenv("RISK_POLL_SECONDS", "3600")) if interval is None else interval
     if seconds != 0 and seconds < 5:
         raise ValueError("RISK_POLL_SECONDS 必须为 0（关闭）或 >= 5")
 
@@ -62,7 +63,7 @@ def create_app(db_path=None, interval=None):
     app.state.store = store
     app.state.portal = portal
     app.add_middleware(CORSMiddleware, allow_origins=["http://127.0.0.1:3000", "http://localhost:3000"],
-                       allow_methods=["GET", "POST", "PATCH"], allow_headers=["Content-Type"])
+                       allow_methods=["GET", "POST", "PATCH", "DELETE"], allow_headers=["Content-Type"])
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"])
 
@@ -99,20 +100,40 @@ def create_app(db_path=None, interval=None):
         return store.registry.catalog()
 
     @app.get("/api/v1/regions", response_model=list[RegionOut])
-    def regions():
-        return store.regions()
+    def regions(include_deleted: bool = False):
+        return store.regions(include_deleted)
 
     @app.post("/api/v1/regions", status_code=201, response_model=RegionOut)
     def create_region(body: RegionCreate):
         return store.create_region(body)
 
     @app.get("/api/v1/monitors", response_model=list[MonitorOut])
-    def monitors():
-        return store.monitors()
+    def monitors(include_deleted: bool = False):
+        return store.monitors(include_deleted)
 
     @app.post("/api/v1/monitors", status_code=201, response_model=MonitorDetail)
     def create_monitor(body: MonitorCreate):
         return store.create_monitor(body)
+
+    @app.delete("/api/v1/regions/{region_id}")
+    def delete_region(region_id: str):
+        return change_region_deleted(store,region_id,True)
+
+    @app.post("/api/v1/regions/{region_id}/restore")
+    def restore_region(region_id: str):
+        return change_region_deleted(store,region_id,False)
+
+    @app.delete("/api/v1/monitors/{monitor_id}")
+    def delete_monitor(monitor_id: str):
+        return remove_monitor(store,monitor_id)
+
+    @app.post("/api/v1/monitors/{monitor_id}/restore", response_model=MonitorDetail)
+    def undo_delete_monitor(monitor_id: str):
+        return restore_monitor(store,monitor_id)
+
+    @app.patch("/api/v1/monitors/{monitor_id}/profile", response_model=MonitorDetail)
+    def edit_profile(monitor_id: str, body: BusinessProfile):
+        return update_profile(store,monitor_id,body)
 
     @app.get("/api/v1/monitors/{monitor_id}", response_model=MonitorDetail)
     def detail(monitor_id: str):
@@ -131,8 +152,8 @@ def create_app(db_path=None, interval=None):
         return store.poll(monitor_id, body.scenario.value)
 
     @app.post("/api/v1/poll", response_model=BatchPollResult)
-    def poll_all():
-        return {"items": store.poll_all()}
+    def poll_all(group: Literal["vessel","aviation"] | None = None):
+        return {"items": store.poll_all(group)}
 
     @app.get("/api/v1/events", response_model=EventPage)
     def events(monitor_id: str | None = None, kind: Literal["vessel","flight","aircraft"] | None = None,

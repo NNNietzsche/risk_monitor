@@ -158,11 +158,11 @@ class Portal:
     def seed(self):
         # An explicit, repeatable demo action; never changes existing targets.
         with self.store.lock:
-            monitors = self.store.monitors()
+            monitors = self.store.monitors(include_deleted=True)
             if not monitors:
-                ship = self.store.create_monitor(MonitorCreate(kind="vessel", name="OCEAN STAR · 演示", mmsi="999000001", region_id="demo-zone"))
+                ship = self.store.create_monitor(MonitorCreate(kind="vessel", name="OCEAN STAR · 演示", mmsi="999000001", region_id="demo-zone", profile={"vessel_type":"container"}))
                 day = datetime.now(timezone(timedelta(hours=9))).date().isoformat()
-                flight = self.store.create_monitor(MonitorCreate(kind="flight", name="RM101 · 演示航班", carrier="RM", flight_number="101", service_date=day, departure="HND", arrival="PVG", scheduled_departure=f"{day}T10:00:00+09:00", scheduled_arrival=f"{day}T13:00:00+09:00", aircraft_registration="DEMO01"))
+                flight = self.store.create_monitor(MonitorCreate(kind="flight", name="RM101 · 演示航班", carrier="RM", flight_number="101", service_date=day, departure="HND", arrival="PVG", scheduled_departure=f"{day}T10:00:00+09:00", scheduled_arrival=f"{day}T13:00:00+09:00", aircraft_registration="DEMO01", profile={"aircraft_model":"B777","aircraft_role":"passenger"}))
                 for monitor, first, second in [(ship, "outside", "inside"), (flight, "on_time", "delayed")]:
                     self.store.poll(monitor["id"], first)
                     self.store.poll(monitor["id"], second)

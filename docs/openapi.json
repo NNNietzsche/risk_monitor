@@ -66,17 +66,39 @@
       "get": {
         "summary": "Regions",
         "operationId": "regions_api_v1_regions_get",
+        "parameters": [
+          {
+            "name": "include_deleted",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Deleted"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/RegionOut"
                   },
-                  "type": "array",
                   "title": "Response Regions Api V1 Regions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -87,14 +109,14 @@
         "summary": "Create Region",
         "operationId": "create_region_api_v1_regions_post",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/RegionCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -124,17 +146,39 @@
       "get": {
         "summary": "Monitors",
         "operationId": "monitors_api_v1_monitors_get",
+        "parameters": [
+          {
+            "name": "include_deleted",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Deleted"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/MonitorOut"
                   },
-                  "type": "array",
                   "title": "Response Monitors Api V1 Monitors Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -145,14 +189,14 @@
         "summary": "Create Monitor",
         "operationId": "create_monitor_api_v1_monitors_post",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/MonitorCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -178,7 +222,116 @@
         }
       }
     },
+    "/api/v1/regions/{region_id}": {
+      "delete": {
+        "summary": "Delete Region",
+        "operationId": "delete_region_api_v1_regions__region_id__delete",
+        "parameters": [
+          {
+            "name": "region_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Region Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/regions/{region_id}/restore": {
+      "post": {
+        "summary": "Restore Region",
+        "operationId": "restore_region_api_v1_regions__region_id__restore_post",
+        "parameters": [
+          {
+            "name": "region_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Region Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/monitors/{monitor_id}": {
+      "delete": {
+        "summary": "Delete Monitor",
+        "operationId": "delete_monitor_api_v1_monitors__monitor_id__delete",
+        "parameters": [
+          {
+            "name": "monitor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Monitor Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "summary": "Detail",
         "operationId": "detail_api_v1_monitors__monitor_id__get",
@@ -236,6 +389,94 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/MonitorPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/monitors/{monitor_id}/restore": {
+      "post": {
+        "summary": "Undo Delete Monitor",
+        "operationId": "undo_delete_monitor_api_v1_monitors__monitor_id__restore_post",
+        "parameters": [
+          {
+            "name": "monitor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Monitor Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitorDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/monitors/{monitor_id}/profile": {
+      "patch": {
+        "summary": "Edit Profile",
+        "operationId": "edit_profile_api_v1_monitors__monitor_id__profile_patch",
+        "parameters": [
+          {
+            "name": "monitor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Monitor Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessProfile"
               }
             }
           }
@@ -366,6 +607,28 @@
       "post": {
         "summary": "Poll All",
         "operationId": "poll_all_api_v1_poll_post",
+        "parameters": [
+          {
+            "name": "group",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "vessel",
+                    "aviation"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -373,6 +636,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BatchPollResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1140,6 +1413,66 @@
         ],
         "title": "BatchPollResult"
       },
+      "BusinessProfile": {
+        "properties": {
+          "vessel_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "container",
+                  "tanker",
+                  "liquid_cargo",
+                  "bulk",
+                  "cargo",
+                  "passenger",
+                  "pilot",
+                  "tug",
+                  "fishing",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vessel Type"
+          },
+          "aircraft_role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "passenger",
+                  "cargo",
+                  "mixed",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aircraft Role"
+          },
+          "aircraft_model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 30,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aircraft Model"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "BusinessProfile"
+      },
       "DashboardOut": {
         "properties": {
           "updated_at": {
@@ -1519,6 +1852,9 @@
             "minLength": 1,
             "title": "Name"
           },
+          "profile": {
+            "$ref": "#/components/schemas/BusinessProfile"
+          },
           "provider": {
             "type": "string",
             "maxLength": 80,
@@ -1747,6 +2083,27 @@
           "source": {
             "$ref": "#/components/schemas/SourceOut"
           },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          },
+          "profile": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Profile"
+          },
+          "business": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Business"
+          },
           "enabled": {
             "type": "boolean",
             "title": "Enabled"
@@ -1874,6 +2231,8 @@
           "rule_id",
           "provider",
           "source",
+          "profile",
+          "business",
           "enabled",
           "cursor",
           "health",
@@ -1944,6 +2303,27 @@
           },
           "source": {
             "$ref": "#/components/schemas/SourceOut"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          },
+          "profile": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Profile"
+          },
+          "business": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Business"
           },
           "enabled": {
             "type": "boolean",
@@ -2042,6 +2422,8 @@
           "rule_id",
           "provider",
           "source",
+          "profile",
+          "business",
           "enabled",
           "cursor",
           "health",
@@ -2264,6 +2646,28 @@
               }
             ],
             "title": "Aircraft Type"
+          },
+          "vessel_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vessel Type"
+          },
+          "aircraft_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aircraft Role"
           },
           "estimated_departure": {
             "anyOf": [
@@ -2542,6 +2946,24 @@
           "created_at": {
             "type": "string",
             "title": "Created At"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          },
+          "monitor_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Monitor Names"
           }
         },
         "type": "object",

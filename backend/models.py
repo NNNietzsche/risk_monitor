@@ -14,9 +14,16 @@ def utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
+class BusinessProfile(StrictModel):
+    vessel_type: Literal['container','tanker','liquid_cargo','bulk','cargo','passenger','pilot','tug','fishing','other'] | None = None
+    aircraft_role: Literal['passenger','cargo','mixed','other'] | None = None
+    aircraft_model: str | None = Field(default=None, min_length=1, max_length=30)
+
+
 class MonitorCreate(StrictModel):
     kind: Literal["vessel", "flight", "aircraft"]
     name: str = Field(min_length=1, max_length=100)
+    profile: BusinessProfile = Field(default_factory=BusinessProfile)
     provider: str = Field(default="mock-v1", min_length=1, max_length=80, pattern=r"^[a-z0-9][a-z0-9_-]*$")
     icao24: str | None = Field(default=None, pattern=r"^[0-9a-f]{6}$")
     imo: str | None = Field(default=None, pattern=r"^\d{7}$")
@@ -35,6 +42,10 @@ class MonitorCreate(StrictModel):
 
     @model_validator(mode="after")
     def validate_business(self):
+        if self.kind == "vessel" and (self.profile.aircraft_role or self.profile.aircraft_model):
+            raise ValueError("船舶不能填写航空属性")
+        if self.kind != "vessel" and self.profile.vessel_type:
+            raise ValueError("航空目标不能填写船型")
         flight_fields = ("carrier", "flight_number", "service_date", "departure", "arrival", "scheduled_departure", "scheduled_arrival")
         if self.kind == "aircraft":
             if not self.aircraft_registration:
@@ -122,6 +133,8 @@ class Observation(StrictModel):
     navigation_status: str | None = None
     callsign: str | None = None
     aircraft_type: str | None = None
+    vessel_type: str | None = None
+    aircraft_role: str | None = None
     estimated_departure: datetime | None = None
     actual_departure: datetime | None = None
     estimated_arrival: datetime | None = None

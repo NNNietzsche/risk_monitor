@@ -1,0 +1,24 @@
+"""Business classifications; no inference of passenger/cargo use from a model code."""
+VESSEL_TYPES={'container':'集装箱船','tanker':'油轮','liquid_cargo':'液货船（细分未提供）','bulk':'散货船','cargo':'货船（细分未提供）',
+              'passenger':'客船','pilot':'引航船','tug':'拖轮','fishing':'渔船','other':'其他船舶'}
+AIRCRAFT_ROLES={'passenger':'客机','cargo':'货机','mixed':'客货混合','other':'其他用途'}
+
+
+def ais_vessel_type(code):
+    if not isinstance(code,int):return None
+    if 60<=code<=69:return 'passenger'
+    if 70<=code<=79:return 'cargo'
+    if 80<=code<=89:return 'liquid_cargo'
+    return {50:'pilot',52:'tug',30:'fishing'}.get(code)
+
+
+def describe_profile(monitor):
+    manual=monitor['profile'];data=(monitor.get('latest') or {}).get('data',{})
+    kind=monitor['kind']
+    category_field='vessel_type' if kind=='vessel' else 'aircraft_role'
+    category=manual.get(category_field) or data.get(category_field)
+    labels=VESSEL_TYPES if kind=='vessel' else AIRCRAFT_ROLES
+    model=manual.get('aircraft_model') or data.get('aircraft_type')
+    return {'category':category,'category_label':labels.get(category,'未分类'),
+            'aircraft_model':model,'category_source':'manual' if manual.get(category_field) else 'provider' if category else None,
+            'model_source':'manual' if manual.get('aircraft_model') else 'provider' if model else None}

@@ -24,6 +24,8 @@ class RegionOut(BaseModel):
     version: int
     geometry: dict[str, Any]
     created_at: str
+    deleted_at: str | None = None
+    monitor_names: list[str] = Field(default_factory=list)
 
 
 class RuleOut(BaseModel):
@@ -85,6 +87,9 @@ class MonitorOut(BaseModel):
     rule_id: str
     provider: str
     source: SourceOut
+    deleted_at: str | None = None
+    profile: dict[str, Any]
+    business: dict[str, Any]
     enabled: bool
     cursor: int
     health: str

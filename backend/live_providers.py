@@ -9,6 +9,7 @@ from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
 import httpx
 from .models import Observation
+from .business_profile import ais_vessel_type
 
 
 
@@ -82,7 +83,12 @@ class DigitrafficProvider:
         self.http=http
     def fetch(self,target,scenario,now):
         mmsi=target["asset"]["mmsi"]
-        return self.http.get(f"https://meri.digitraffic.fi/api/ais/v1/locations?mmsi={mmsi}")
+        payload=dict(self.http.get(f"https://meri.digitraffic.fi/api/ais/v1/locations?mmsi={mmsi}"))
+        try:
+            payload['vessel_metadata']=self.http.get(f"https://meri.digitraffic.fi/api/ais/v1/vessels/{mmsi}",ttl=86400)
+        except FetchError as exc:
+            payload['metadata_error']=exc.payload
+        return payload
     def normalize(self,payload,target):
         features=payload["body"].get("features",[])
         matches=[f for f in features if str(f.get("properties",{}).get("mmsi"))==target["asset"]["mmsi"]]
@@ -94,8 +100,10 @@ class DigitrafficProvider:
             raise ValueError("AIS 响应缺少点坐标")
         lon,lat=feature["geometry"]["coordinates"][:2]
         nav={0:"under_way",1:"at_anchor",2:"not_under_command",3:"restricted_maneuverability",4:"constrained_by_draught",5:"moored",6:"aground",7:"fishing",8:"under_way_sailing"}.get(p.get("navStat"),"unknown")
+        metadata=payload.get('vessel_metadata',{}).get('body',{})
+        category=ais_vessel_type(metadata.get('shipType')) if str(metadata.get('mmsi'))==target['asset']['mmsi'] else None
         return Observation(kind="vessel",observed_at=datetime.fromtimestamp(p["timestampExternal"]/1000,timezone.utc),
-                           longitude=lon,latitude=lat,navigation_status=nav)
+                           longitude=lon,latitude=lat,navigation_status=nav,vessel_type=category)
 
 
 class ADSBLolProvider:

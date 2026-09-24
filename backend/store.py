@@ -10,7 +10,8 @@ from .providers import VESSEL_SCENARIOS, FLIGHT_SCENARIOS
 from .rules import ENGINE_VERSION, evaluate
 from .live_providers import PublicHTTP
 from .provider_registry import create_registry
-from .migrations import migrate_aircraft
+from .migrations import migrate_aircraft, migrate_management
+from .business_profile import describe_profile
 
 
 def stamp():
@@ -66,12 +67,13 @@ class Store:
         with self.connection() as db:
             db.executescript(Path(__file__).with_name("schema.sql").read_text(encoding="utf-8"))
             db.execute("INSERT OR IGNORE INTO schema_versions VALUES (1,?)", (stamp(),))
-            db.execute("INSERT OR IGNORE INTO regions VALUES (?,?,?,?,?)",
+            db.execute("INSERT OR IGNORE INTO regions(id,name,version,geometry,created_at) VALUES (?,?,?,?,?)",
                        ("demo-zone", "演示区域 A（非真实风险评级）", 1,
                         encoded({"type": "Polygon", "coordinates": [[[40,10],[50,10],[50,20],[40,20],[40,10]]],
                                  "bbox": [40,10,50,20]}), stamp()))
             db.execute("PRAGMA optimize")
         migrate_aircraft(self.path)
+        migrate_management(self.path)
 
     def connection(self):
         db = sqlite3.connect(self.path, timeout=15)
@@ -81,7 +83,7 @@ class Store:
         return ClosingConnection(db)
 
     def _target(self, db, monitor_id):
-        m = unpack(db.execute("SELECT * FROM monitors WHERE id=?", (monitor_id,)).fetchone(), ("state",))
+        m = unpack(db.execute("SELECT * FROM monitors WHERE id=?", (monitor_id,)).fetchone(), ("state","profile"))
         if not m:
             raise NotFound("监控对象不存在")
         m["source"] = self.registry.source(m["provider"])
@@ -95,11 +97,12 @@ class Store:
             age = (datetime.now(timezone.utc) - datetime.fromisoformat(m["latest"]["observed_at"])).total_seconds()
             if age > m["rule"]["config"]["max_age_seconds"]:
                 m["health"] = "stale"
+        m["business"] = describe_profile(m)
         return m
 
-    def monitors(self):
+    def monitors(self, include_deleted=False):
         with self.connection() as db:
-            return [self._target(db, r["id"]) for r in db.execute("SELECT id FROM monitors ORDER BY created_at DESC").fetchall()]
+            return [self._target(db, r["id"]) for r in db.execute("SELECT id FROM monitors" + ("" if include_deleted else " WHERE deleted_at IS NULL") + " ORDER BY created_at DESC").fetchall()]
 
     def detail(self, monitor_id):
         with self.connection() as db:
@@ -110,16 +113,19 @@ class Store:
             result["configuration_audit"] = [unpack(r, ("before_value","after_value")) for r in db.execute("SELECT * FROM configuration_audit WHERE monitor_id=? ORDER BY created_at DESC LIMIT 50", (monitor_id,))]
             return result
 
-    def regions(self):
+    def regions(self, include_deleted=False):
         with self.connection() as db:
-            return [unpack(r, ("geometry",)) for r in db.execute("SELECT * FROM regions ORDER BY created_at")]
+            result=[unpack(r, ("geometry",)) for r in db.execute("SELECT * FROM regions" + ("" if include_deleted else " WHERE deleted_at IS NULL") + " ORDER BY created_at")]
+            for region in result:
+                region['monitor_names']=[row['name'] for row in db.execute("SELECT m.name FROM monitors m JOIN rule_versions r ON r.id=m.rule_id WHERE m.deleted_at IS NULL AND json_extract(r.config,'$.region_id')=?",(region['id'],))]
+            return result
 
     def create_region(self, request: RegionCreate):
         region_id = uid()
         w, s, e, n = request.west, request.south, request.east, request.north
         geometry = {"type": "Polygon", "coordinates": [[[w,s],[e,s],[e,n],[w,n],[w,s]]], "bbox": [w,s,e,n]}
         with self.lock, self.connection() as db:
-            db.execute("INSERT INTO regions VALUES (?,?,?,?,?)", (region_id, request.name, 1, encoded(geometry), stamp()))
+            db.execute("INSERT INTO regions(id,name,version,geometry,created_at) VALUES (?,?,?,?,?)", (region_id, request.name, 1, encoded(geometry), stamp()))
         return next(r for r in self.regions() if r["id"] == region_id)
 
     def create_monitor(self, request: MonitorCreate):
@@ -133,7 +139,7 @@ class Store:
             with self.lock, self.connection() as db:
                 db.execute("BEGIN IMMEDIATE")
                 if request.kind == "vessel":
-                    if not db.execute("SELECT id FROM regions WHERE id=?", (request.region_id,)).fetchone():
+                    if not db.execute("SELECT id FROM regions WHERE id=? AND deleted_at IS NULL", (request.region_id,)).fetchone():
                         raise NotFound("风险区域不存在")
                     asset_id = uid()
                     db.execute("INSERT INTO assets(id,kind,name,imo,mmsi) VALUES (?,?,?,?,?)",
@@ -159,11 +165,11 @@ class Store:
                                 request.departure, request.arrival, request.scheduled_departure.isoformat(), request.scheduled_arrival.isoformat()))
                     config.update(threshold_minutes=request.threshold_minutes, delay_basis=request.delay_basis)
                 db.execute("INSERT INTO rule_versions VALUES (?,?,?,?,?,?)", (rule_id, request.kind, 1, ENGINE_VERSION, encoded(config), stamp()))
-                db.execute("INSERT INTO monitors(id,name,kind,asset_id,flight_id,rule_id,provider,created_at) VALUES (?,?,?,?,?,?,?,?)",
-                           (m_id, request.name, request.kind, asset_id, flight_id, rule_id, request.provider, stamp()))
+                db.execute("INSERT INTO monitors(id,name,kind,asset_id,flight_id,rule_id,provider,created_at,profile) VALUES (?,?,?,?,?,?,?,?,?)",
+                           (m_id, request.name, request.kind, asset_id, flight_id, rule_id, request.provider, stamp(), encoded(request.profile.model_dump())))
                 self._audit(db, m_id, "created", {}, request.model_dump(mode="json"))
         except sqlite3.IntegrityError as exc:
-            raise Conflict("相同 IMO/MMSI 的船舶、飞机实体或航班实例已经存在") from exc
+            raise Conflict("相同 IMO/MMSI 的船舶、飞机实体或航班实例已经存在；已删除目标请到管理页面恢复") from exc
         return self.detail(m_id)
 
     def _audit(self, db, monitor_id, action, before, after):
@@ -174,6 +180,8 @@ class Store:
         with self.lock, self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
             m = self._target(db, monitor_id)
+            if m["deleted_at"]:
+                raise Conflict("目标已删除，请先恢复")
             db.execute("UPDATE monitors SET enabled=? WHERE id=?", (int(enabled), monitor_id))
             self._audit(db, monitor_id, "enabled", {"enabled": m["enabled"]}, {"enabled": enabled})
         return self.detail(monitor_id)
@@ -182,6 +190,8 @@ class Store:
         with self.lock, self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
             m = self._target(db, monitor_id)
+            if m["deleted_at"]:
+                raise Conflict("目标已删除，请先恢复")
             if m["kind"] != "flight":
                 raise Conflict("此接口仅支持航班延误规则")
             old = m["rule"]
@@ -197,6 +207,8 @@ class Store:
         with self.lock:
             with self.connection() as db:
                 m = self._target(db, monitor_id)
+            if m["deleted_at"]:
+                raise Conflict("目标已删除")
             if not m["enabled"]:
                 raise Conflict("该监控已暂停")
             if not m["source"]["is_mock"]:
@@ -278,10 +290,10 @@ class Store:
             db.execute("UPDATE raw_records SET outcome=?,error=? WHERE id=?", (outcome, message, raw_id))
             db.execute("UPDATE monitors SET health=?,last_error=? WHERE id=?", (outcome, message, monitor_id))
 
-    def poll_all(self):
+    def poll_all(self, group=None):
         results = []
         for m in self.monitors():
-            if m["enabled"]:
+            if m["enabled"] and (group is None or (m["kind"] == "vessel" if group == "vessel" else m["kind"] in {"flight","aircraft"})):
                 try:
                     results.append({"monitor_id": m["id"], **self.poll(m["id"])})
                 except Exception as exc:

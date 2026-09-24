@@ -13,7 +13,12 @@
 | GET / PATCH | /monitors/{id} | 详情 / enabled 开关 |
 | POST | /monitors/{id}/rule-versions | 航班规则新版本 |
 | POST | /monitors/{id}/poll | 真实源使用空请求体 `{}`；模拟源可指定场景；限频返回 throttled、raw_id=null |
-| POST | /poll | 所有启用对象推进序列 |
+| POST | /poll | 所有启用且未删除对象采集；可选 group=vessel 或 aviation，航空包括飞机实体和航班实例 |
+| DELETE | /monitors/{id} | 停止采集并软删除；保留历史证据 |
+| POST | /monitors/{id}/restore | 恢复目标，保持暂停 |
+| PATCH | /monitors/{id}/profile | 维护船型、机型及客货用途，记配置审计 |
+| DELETE | /regions/{id} | 软删除区域；存在未删除目标引用时返回 409 |
+| POST | /regions/{id}/restore | 恢复区域 |
 | GET | /events | monitor_id、kind、severity、since、until、limit、offset |
 | GET | /events/{id} | 事件与证据 |
 
@@ -32,6 +37,10 @@
 occurred_at 是触发观察时间，并非推测的真实跨界时刻。severity 是演示规则等级。
 列表为 {items,total,limit,offset}；详情最多返回最近 50 状态/评估、20 原始记录、50 配置变更，完整历史在数据库中。
 监控列表首版无分页，适合小规模本地原型。
+
+`GET /monitors` 和 `GET /regions` 默认不包含已删除项，可用 `include_deleted=true` 查询管理列表。目标详情及历史事件继续可查。区域返回 `monitor_names` 供展示引用关系。
+
+创建目标可含 `profile`；维护接口接受同一结构，例如 `{"vessel_type":"container"}` 或 `{"aircraft_model":"B777","aircraft_role":"passenger"}`。维护接口完整替换人工维护值，未传/空值回退到来源信息。响应中的 `business` 是统一展示结构（category、category_label、aircraft_model、category_source、model_source），人工值优先、来源值其次，缺失不猜测。字段枚举详见 OpenAPI。分类不参与确定性风险判断。
 
 
 ## 公开真实数据扩展
