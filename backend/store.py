@@ -133,6 +133,10 @@ class Store:
         m_id, rule_id = uid(), uid()
         asset_id = flight_id = None
         config = {"max_age_seconds": spec["max_age_seconds"]}
+        if request.source_ref:
+            config['source_ref'] = request.source_ref
+        if request.kind=='flight' and request.aircraft_registration:
+            config['aircraft_registration']=request.aircraft_registration
         if spec["min_poll_seconds"]:
             config["min_poll_seconds"] = spec["min_poll_seconds"]
         try:

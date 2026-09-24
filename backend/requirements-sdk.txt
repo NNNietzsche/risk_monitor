@@ -1,0 +1,8 @@
+vendor/flightradarapi-1.6.1-py3-none-any.whl
+vendor/marinetrafficapi-0.1.0-py3-none-any.whl
+curl_cffi==0.16.3
+Brotli==1.2.0
+beautifulsoup4==4.15.0
+cffi==2.1.1
+soupsieve==2.10
+pycparser==3.0

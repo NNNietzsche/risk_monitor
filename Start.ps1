@@ -8,6 +8,6 @@ if (Test-Path -LiteralPath '.env') {
         }
     }
 }
-if (-not $env:RISK_POLL_SECONDS) { $env:RISK_POLL_SECONDS = '3600' }
+if (-not $env:RISK_POLL_SECONDS) { $env:RISK_POLL_SECONDS = '1800' }
 Write-Host 'Open http://127.0.0.1:8000/asset-risk.html - Ctrl+C to stop.'
 & './.venv/Scripts/python.exe' -m uvicorn backend.app:create_app --factory --host 127.0.0.1 --port 8000

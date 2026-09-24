@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parent.parent
 def create_app(db_path=None, interval=None):
     store = Store(db_path or os.getenv("RISK_DB_PATH", str(ROOT / "data" / "risk.db")))
     portal = Portal(store)
-    seconds = int(os.getenv("RISK_POLL_SECONDS", "3600")) if interval is None else interval
+    seconds = int(os.getenv("RISK_POLL_SECONDS", "1800")) if interval is None else interval
     if seconds != 0 and seconds < 5:
         raise ValueError("RISK_POLL_SECONDS 必须为 0（关闭）或 >= 5")
 
@@ -65,12 +65,15 @@ def create_app(db_path=None, interval=None):
     app.add_middleware(CORSMiddleware, allow_origins=["http://127.0.0.1:3000", "http://localhost:3000"],
                        allow_methods=["GET", "POST", "PATCH", "DELETE"], allow_headers=["Content-Type"])
 
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"])
+    hosts=["127.0.0.1", "localhost", "testserver"] + [h.strip() for h in os.getenv('RISK_ALLOWED_HOSTS','').split(',') if h.strip()]
+    origins={"http://127.0.0.1:3000", "http://localhost:3000", "http://127.0.0.1:8000", "http://localhost:8000"}
+    origins.update(o.strip() for o in os.getenv('RISK_ALLOWED_ORIGINS','').split(',') if o.strip())
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts)
 
     @app.middleware("http")
     async def local_origin_boundary(request, call_next):
         origin = request.headers.get("origin")
-        if request.method in {"POST", "PATCH", "DELETE", "PUT"} and origin and origin not in {"http://127.0.0.1:3000", "http://localhost:3000", "http://127.0.0.1:8000", "http://localhost:8000"}:
+        if request.method in {"POST", "PATCH", "DELETE", "PUT"} and origin and origin not in origins:
             return JSONResponse(status_code=403, content={"detail": "不接受其他网站发起的修改请求"})
         return await call_next(request)
 

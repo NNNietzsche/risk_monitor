@@ -26,6 +26,7 @@ class MonitorCreate(StrictModel):
     profile: BusinessProfile = Field(default_factory=BusinessProfile)
     provider: str = Field(default="mock-v1", min_length=1, max_length=80, pattern=r"^[a-z0-9][a-z0-9_-]*$")
     icao24: str | None = Field(default=None, pattern=r"^[0-9a-f]{6}$")
+    source_ref: str | None = Field(default=None, min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
     imo: str | None = Field(default=None, pattern=r"^\d{7}$")
     mmsi: str | None = Field(default=None, pattern=r"^\d{9}$")
     region_id: str | None = None
@@ -135,6 +136,10 @@ class Observation(StrictModel):
     aircraft_type: str | None = None
     vessel_type: str | None = None
     aircraft_role: str | None = None
+    location_name: str | None = Field(default=None, max_length=120)
+    departure: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
+    arrival: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
+    position_observed_at: datetime | None = None
     estimated_departure: datetime | None = None
     actual_departure: datetime | None = None
     estimated_arrival: datetime | None = None
@@ -143,7 +148,7 @@ class Observation(StrictModel):
 
     @model_validator(mode="after")
     def times(self):
-        for key in ("observed_at", "estimated_departure", "actual_departure", "estimated_arrival", "actual_arrival"):
+        for key in ("observed_at", "position_observed_at", "estimated_departure", "actual_departure", "estimated_arrival", "actual_arrival"):
             value = getattr(self, key)
             if value is not None:
                 setattr(self, key, utc(value))

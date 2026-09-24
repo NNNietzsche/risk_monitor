@@ -51,7 +51,7 @@ function renderMonitors(items) {
       const meta=TargetPresenter.metadata(m);
       const metadata=el('div',meta,'target-meta');metadata.title=meta;text.append(name,metadata);identity.append(dot,text);
       const place=el('div',undefined,'target-location');
-      const label=m.kind==='aircraft'?'仅位置 · 航线未提供':isShip?RiskPlaces.seaName(m.latest?.data):`${RiskPlaces.airport(m.flight.departure)} → ${RiskPlaces.airport(m.flight.arrival)}`;
+      const label=m.kind==='aircraft'?(m.latest?.data.departure&&m.latest?.data.arrival?`${RiskPlaces.airport(m.latest.data.departure)} → ${RiskPlaces.airport(m.latest.data.arrival)}`:'仅位置 · 航线未提供'):isShip?(m.latest?.data.location_name||RiskPlaces.seaName(m.latest?.data)):`${RiskPlaces.airport(m.flight.departure)} → ${RiskPlaces.airport(m.flight.arrival)}`;
       const historical=isShip&&m.latest&&(!m.enabled||m.health!=='ok');
       const location=el('div',label+(historical?'（历史）':''),'compact-location');
       location.title=m.kind==='aircraft'?'飞机实体定位；不能仅凭呼号确认具体航班实例。':isShip?'大致海域，仅供位置理解；不参与风险规则。':`${m.flight.departure} → ${m.flight.arrival}`;
@@ -155,7 +155,8 @@ async function addMonitor(){
   const updateSource=()=>{
     const spec=sources[provider.value];
     note.textContent=spec?spec.coverage:'尚无支持该类型的数据源';
-    for(const name of ['imo','mmsi','icao24']){const input=body.querySelector(`[name="${name}"]`);if(input)input.required=(spec?.required_fields?.[kind.value]||[]).includes(name);}
+    const reference=body.querySelector('[name="source_ref"]');if(reference){reference.closest('label').hidden=!(spec?.required_fields?.[kind.value]||[]).includes('source_ref');reference.disabled=reference.closest('label').hidden;reference.closest('label').querySelector('span').textContent=spec?.reference_label||'来源编号';}
+    for(const name of ['imo','mmsi','icao24','source_ref']){const input=body.querySelector(`[name="${name}"]`);if(input)input.required=(spec?.required_fields?.[kind.value]||[]).includes(name);}
   };
   const redraw=()=>{
     body.replaceChildren();provider.replaceChildren();
@@ -174,6 +175,7 @@ async function addMonitor(){
       field(body,'计划起飞（须含时区）','scheduled_departure','text',day+'T10:00:00+09:00');field(body,'计划到达（须含时区）','scheduled_arrival','text',day+'T13:00:00+09:00');
       field(body,'延误阈值（分钟）','threshold_minutes','number','60');select(body,'比较时间','delay_basis',[['departure','起飞'],['arrival','到达']]);
     }
+    field(body,'来源编号','source_ref','text','',false);
     profileFields(body,kind.value);
     updateSource();
   };
@@ -209,5 +211,5 @@ $('timeline-latest').onclick=()=>{timelineOffset=0;timelineSnapshot=null;action(
 for(const id of ['ai-enabled','ai-auto'])$(id).onchange=()=>action(async()=>{try{renderAI(await api('/ai/settings','PATCH',{enabled:$('ai-enabled').checked,auto_refresh:$('ai-auto').checked}));}catch(e){renderAI(await api('/ai/status'));throw e;}});
 $('ai-refresh').onclick=()=>action(async()=>{renderAI(await api('/ai/refresh','POST'));},$('ai-refresh'));
 $('header-date').textContent=new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Tokyo',dateStyle:'long'}).format(new Date());
-action(async()=>{await RiskPlaces.load();await refresh();const health=await api('/health');$('schedule').textContent=health.scheduler_seconds?`自动采集：每 ${health.scheduler_seconds>=3600?health.scheduler_seconds/3600+' 小时':health.scheduler_seconds+' 秒'} · 页面每 15 秒只读本地缓存`:'自动采集关闭 · 使用船舶或航空刷新按钮 · 时间为 JST';});
+action(async()=>{await RiskPlaces.load();await refresh();const health=await api('/health');$('schedule').textContent=health.scheduler_seconds?`自动采集：每 ${health.scheduler_seconds>=3600?health.scheduler_seconds/3600+' 小时':health.scheduler_seconds>=60?health.scheduler_seconds/60+' 分钟':health.scheduler_seconds+' 秒'} · 页面每 15 秒只读本地缓存`:'自动采集关闭 · 使用船舶或航空刷新按钮 · 时间为 JST';});
 setInterval(()=>{if(!document.hidden&&!$('dialog').open)action(refresh);},15000);

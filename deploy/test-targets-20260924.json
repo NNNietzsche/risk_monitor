@@ -1,0 +1,60 @@
+[
+  {
+    "kind": "vessel",
+    "name": "COSCO SHIPPING UNIVERSE",
+    "imo": "9795610",
+    "mmsi": "477157400",
+    "source_ref": "5554510",
+    "provider": "marinetraffic-sdk-v1",
+    "profile": {
+      "vessel_type": "container"
+    }
+  },
+  {
+    "kind": "vessel",
+    "name": "EVER GIVEN",
+    "imo": "9811000",
+    "mmsi": "636026627",
+    "source_ref": "5630138",
+    "provider": "marinetraffic-sdk-v1",
+    "profile": {
+      "vessel_type": "container"
+    }
+  },
+  {
+    "kind": "flight",
+    "name": "NH8501 · 2026-09-24",
+    "provider": "flightradar-sdk-v1",
+    "source_ref": "41ceb9e3",
+    "carrier": "NH",
+    "flight_number": "8501",
+    "service_date": "2026-09-24",
+    "departure": "NRT",
+    "arrival": "DLC",
+    "scheduled_departure": "2026-09-24T13:35:00+09:00",
+    "scheduled_arrival": "2026-09-24T15:45:00+08:00",
+    "aircraft_registration": "JA602F",
+    "profile": {
+      "aircraft_model": "B763",
+      "aircraft_role": "cargo"
+    }
+  },
+  {
+    "kind": "flight",
+    "name": "HO1380 · 2026-09-24",
+    "provider": "flightradar-sdk-v1",
+    "source_ref": "41ceb569",
+    "carrier": "HO",
+    "flight_number": "1380",
+    "service_date": "2026-09-24",
+    "departure": "NRT",
+    "arrival": "PVG",
+    "scheduled_departure": "2026-09-24T13:20:00+09:00",
+    "scheduled_arrival": "2026-09-24T15:25:00+08:00",
+    "aircraft_registration": "B-20EC",
+    "profile": {
+      "aircraft_model": "B789",
+      "aircraft_role": null
+    }
+  }
+]

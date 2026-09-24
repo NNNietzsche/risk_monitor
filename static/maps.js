@@ -35,11 +35,11 @@ window.RiskMaps = (() => {
       const d=m.latest?.data;
       if(d?.longitude==null||d?.latitude==null)return;
       const [x,y]=project(d.longitude,d.latitude);
-      const historical=m.health!=='ok'||!m.enabled||['cancelled'].includes(d.flight_status);
+      const historical=(m.health!=='ok'||(d.position_observed_at&&(Date.now()-Date.parse(d.position_observed_at))/1000>m.rule.config.max_age_seconds))||!m.enabled||['cancelled'].includes(d.flight_status);
       const danger=m.state.inside||m.state.exceeded||['cancelled','diverted'].includes(m.state.flight_status);
       const color=historical?'#7f8b99':danger?'#cb6649':'#2d70c4';
       const marker=create('g',{tabindex:0,role:'button','data-monitor-id':m.id,'aria-label':`${m.name}，${d.longitude}，${d.latitude}${historical?'，历史定位':''}`,class:'map-marker'});
-      const title=create('title',{},`${m.name}\n${d.longitude}°, ${d.latitude}°\n${m.latest.observed_at}${historical?' · 历史定位':''}`);
+      const title=create('title',{},`${m.name}\n${d.longitude}°, ${d.latitude}°\n${d.position_observed_at||m.latest.observed_at}${historical?' · 历史定位':''}`);
       const dot=create('circle',{cx:0,cy:0,r:8,fill:color,stroke:'white','stroke-width':2});
       const icon=create('text',{x:0,y:3.5,'text-anchor':'middle',fill:'white','font-size':10,'pointer-events':'none'},m.kind==='vessel'?'◆':'✈');
       const label=create('text',{x:12,y:4,fill:'#29455e','font-size':10,'paint-order':'stroke',stroke:'#ffffff','stroke-width':3,'stroke-linejoin':'round','pointer-events':'none'},m.name.length>22?m.name.slice(0,22)+'…':m.name);

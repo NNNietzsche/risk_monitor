@@ -70,7 +70,7 @@ def test_group_refresh_does_not_poll_other_group_or_paused_targets(tmp_path):
         assert c.post('/api/v1/poll?group=invalid').status_code==422
 
 
-def test_default_hourly_scheduler_and_local_reads_do_not_fetch(tmp_path,monkeypatch):
+def test_default_half_hour_scheduler_and_local_reads_do_not_fetch(tmp_path,monkeypatch):
     monkeypatch.delenv('RISK_POLL_SECONDS',raising=False)
     app=create_app(tmp_path/'hourly.db')
     calls=[]
@@ -78,7 +78,7 @@ def test_default_hourly_scheduler_and_local_reads_do_not_fetch(tmp_path,monkeypa
     provider.fetch=lambda *args: calls.append(args)
     with TestClient(app) as c:
         ship(c)
-        assert c.get('/api/v1/health').json()['scheduler_seconds']==3600
+        assert c.get('/api/v1/health').json()['scheduler_seconds']==1800
         for _ in range(3):
             assert c.get('/api/v1/dashboard').status_code==200
             assert c.get('/api/v1/public/sources').status_code==200

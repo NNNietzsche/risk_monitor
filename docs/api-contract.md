@@ -1,4 +1,6 @@
 # API Contract v1
+
+2026-09-24 扩展：创建目标可含 `source_ref`，由 Provider 解释其含义；MarineTraffic vessel 必填 shipId，FR24 flight 必填当天 flight ID，FR24 aircraft 按注册号查询。该值随当前规则配置和创建审计保存。来源目录新增 `reference_label`，前端据此展示录入标签，不硬编码供应商逻辑。Observation 新增 `location_name`、`departure`、`arrival` 和 `position_observed_at`，分别用于来源海域名称、飞机当前航段、位置独立时间。默认调度 1800 秒。
 前缀 /api/v1，JSON，时间为含时区 ISO 8601；统一 UTC 响应。
 经纬度为度；GeoJSON 顺序 [longitude,latitude]。
 完整契约见 openapi.json。新增 201，读取/操作 200。

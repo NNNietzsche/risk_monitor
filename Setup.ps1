@@ -10,4 +10,6 @@ if (-not $runtimePython) { throw 'Install Python 3.11 or newer.' }
 if ($LASTEXITCODE -ne 0) { throw 'Virtual environment creation failed.' }
 & './.venv/Scripts/python.exe' -m pip install -r backend/requirements.lock.txt
 if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed.' }
+& './.venv/Scripts/python.exe' -m pip install -r backend/requirements-sdk.txt
+if ($LASTEXITCODE -ne 0) { throw 'SDK dependency installation failed.' }
 Write-Host 'Setup complete. Run .\Start.ps1'
