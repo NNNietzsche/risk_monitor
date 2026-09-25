@@ -13,14 +13,14 @@ class ProviderRegistry:
 
     def register(self, provider, *, name, kinds, capabilities, required_fields=None,
                  is_mock=False, url=None, license=None, coverage='',
-                 min_poll_seconds=60, max_age_seconds=900, discover=None, reference_label=None):
+                 min_poll_seconds=60, max_age_seconds=900, discover=None, reference_label=None, profile_mode='manual_fallback'):
         if provider.name in self.providers:
             raise ValueError('重复的数据源注册')
         self.providers[provider.name] = provider
         self.specs[provider.name] = dict(name=name, kinds=list(kinds), capabilities=capabilities,
             required_fields=required_fields or {}, is_mock=is_mock, live=not is_mock,
             url=url, license=license, coverage=coverage,
-            min_poll_seconds=min_poll_seconds, max_age_seconds=max_age_seconds, reference_label=reference_label)
+            min_poll_seconds=min_poll_seconds, max_age_seconds=max_age_seconds, reference_label=reference_label, profile_mode=profile_mode)
         if discover:
             self.discoverers[provider.name] = discover
 
@@ -84,9 +84,9 @@ def create_registry(http):
         url='https://www.marinetraffic.com/',coverage='按已核实的 shipId 获取单船位置；网页接口实验接入，可能返回旧位置或无数据',
         min_poll_seconds=300,max_age_seconds=3600)
     registry.register(FlightRadarProvider(gateway),name='Flightradar24（FlightRadarAPI）',kinds=['aircraft','flight'],
-        capabilities={'aircraft':['position'],'flight':['position','flight_times','flight_status']},
+        capabilities={'aircraft':['position','current_flight'],'flight':['position','flight_times','flight_status']},
         required_fields={'aircraft':['aircraft_registration'],'flight':['source_ref']},
         reference_label='当天航班来源编号（FR24 flight ID）',
         url='https://github.com/JeanExtreme002/FlightRadarAPI',coverage='实验 SDK：飞机按注册号查询，航班按当天实例查询；缺失或身份变化不会冒充正常',
-        min_poll_seconds=300,max_age_seconds=3600)
+        min_poll_seconds=300,max_age_seconds=3600,profile_mode='provider')
     return registry

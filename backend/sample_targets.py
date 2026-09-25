@@ -13,7 +13,9 @@ def add_samples(store,path):
     if not region:region=store.create_region(RegionCreate(name='红海测试围栏（仅联调，非风险评级）',west=32,south=12,east=44,north=30))
     ids=[]
     for row in rows:
-        existing=next((m for m in store.monitors(include_deleted=True) if m['provider']==row['provider'] and m['rule']['config'].get('source_ref')==row['source_ref']),None)
+        existing=next((m for m in store.monitors(include_deleted=True) if m['provider']==row['provider'] and
+                       ((row['kind']=='aircraft' and m['kind']=='aircraft' and m['asset']['registration']==row['aircraft_registration']) or
+                        (row['kind']!='aircraft' and m['rule']['config'].get('source_ref')==row.get('source_ref')))),None)
         if existing:
             if existing['deleted_at']:continue
             ids.append(existing['id']);continue

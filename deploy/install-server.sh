@@ -56,7 +56,7 @@ config='risk-monitor.bocom-tokyo.site {\n    encode gzip\n    basicauth {\n     
 file=Path('/etc/caddy/Caddyfile');file.write_text(config)
 PY
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
-runuser -u riskmonitor -- .venv/bin/python -m backend.sample_targets --file deploy/test-targets-20260924.json --db /var/lib/risk-monitor/risk.db
+runuser -u riskmonitor -- .venv/bin/python -m backend.sample_targets --file deploy/test-targets-20260925.json --db /var/lib/risk-monitor/risk.db
 systemctl daemon-reload
 systemctl enable --now risk-monitor
 systemctl restart risk-monitor

@@ -2683,6 +2683,66 @@
             ],
             "title": "Aircraft Role"
           },
+          "aircraft_category": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aircraft Category"
+          },
+          "flight_number": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 30
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flight Number"
+          },
+          "flight_source_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flight Source Ref"
+          },
+          "scheduled_departure": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled Departure"
+          },
+          "scheduled_arrival": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled Arrival"
+          },
           "location_name": {
             "anyOf": [
               {
@@ -3254,6 +3314,11 @@
               }
             ],
             "title": "Reference Label"
+          },
+          "profile_mode": {
+            "type": "string",
+            "title": "Profile Mode",
+            "default": "manual_fallback"
           }
         },
         "type": "object",

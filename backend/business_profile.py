@@ -15,6 +15,12 @@ def ais_vessel_type(code):
 def describe_profile(monitor):
     manual=monitor['profile'];data=(monitor.get('latest') or {}).get('data',{})
     kind=monitor['kind']
+    if monitor.get('source',{}).get('profile_mode')=='provider':
+        category=data.get('aircraft_category') if kind!='vessel' else data.get('vessel_type')
+        model=data.get('aircraft_type')
+        return {'category':category,'category_label':category or '分类未提供',
+                'aircraft_model':model,'category_source':'provider' if category else None,
+                'model_source':'provider' if model else None}
     category_field='vessel_type' if kind=='vessel' else 'aircraft_role'
     category=manual.get(category_field) or data.get(category_field)
     labels=VESSEL_TYPES if kind=='vessel' else AIRCRAFT_ROLES

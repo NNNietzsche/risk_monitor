@@ -1,5 +1,7 @@
 # 实验 SDK 接入（2026-09-24）
 
+2026-09-25 更新：飞机样例已改为按注册号持续跟踪，当前能力和迁移方式见 [aircraft-tracking.md](aircraft-tracking.md)。下文固定日期航班样例和人工分类为 9 月 24 日的历史记录；新清单为 deploy/test-targets-20260925.json。
+
 `FlightRadarAPI 1.6.1` 来自本机 `C:/develop/FlightRadarAPI/python` 的源码构建；`MarineTrafficAPI 0.1.0` 来自本地半成品 SDK 的 wheel。固定安装包保存在 vendor，`backend/requirements-sdk.txt` 是安装入口，不从同名陌生 PyPI 包安装 MarineTrafficAPI。
 
 ## 分层和更新

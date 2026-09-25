@@ -16,6 +16,7 @@ from .responses import (RegionOut, MonitorOut, MonitorDetail, EventPage, EventDe
 from .models import MonitorCreate, MonitorPatch, PollRequest, RegionCreate, RuleChange, BusinessProfile, utc
 from .store import Store, NotFound, Conflict
 from .management import update_profile, remove_monitor, restore_monitor, change_region_deleted
+from .rules import ENGINE_VERSION
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -92,7 +93,7 @@ def create_app(db_path=None, interval=None):
     @app.get("/api/v1/health", response_model=HealthOut)
     def health():
         modes = {not m["source"]["is_mock"] for m in store.monitors() if m["enabled"]}
-        return {"status": "ok", "mode": "mixed" if len(modes)>1 else "live" if modes == {True} else "mock", "scheduler_seconds": seconds, "engine_version": "1.0.0"}
+        return {"status": "ok", "mode": "mixed" if len(modes)>1 else "live" if modes == {True} else "mock", "scheduler_seconds": seconds, "engine_version": ENGINE_VERSION}
 
     @app.get("/api/v1/public/targets")
     def public_targets():

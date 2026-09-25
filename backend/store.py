@@ -12,6 +12,7 @@ from .live_providers import PublicHTTP
 from .provider_registry import create_registry
 from .migrations import migrate_aircraft, migrate_management
 from .business_profile import describe_profile
+from .sdk_providers import NoLivePosition
 
 
 def stamp():
@@ -155,6 +156,9 @@ class Store:
                     if not row:
                         db.execute("INSERT INTO assets(id,kind,name,registration) VALUES (?,?,?,?)", (asset_id, "aircraft", request.name, request.aircraft_registration))
                     config.update(icao24=request.icao24, capabilities=["position"], flight_risk_assessed=False)
+                    if 'current_flight' in spec['capabilities'].get('aircraft',[]):
+                        config.update(threshold_minutes=request.threshold_minutes, delay_basis=request.delay_basis,
+                                      capabilities=spec['capabilities']['aircraft'])
                 else:
                     aircraft_id = None
                     if request.aircraft_registration:
@@ -196,13 +200,13 @@ class Store:
             m = self._target(db, monitor_id)
             if m["deleted_at"]:
                 raise Conflict("目标已删除，请先恢复")
-            if m["kind"] != "flight":
+            if m["kind"] != "flight" and 'current_flight' not in m['rule']['config'].get('capabilities',[]):
                 raise Conflict("此接口仅支持航班延误规则")
             old = m["rule"]
             config = {**old["config"], **request.model_dump()}
             new_id = uid()
             db.execute("INSERT INTO rule_versions VALUES (?,?,?,?,?,?)",
-                       (new_id, "flight", old["version"] + 1, ENGINE_VERSION, encoded(config), stamp()))
+                       (new_id, m['kind'], old["version"] + 1, ENGINE_VERSION, encoded(config), stamp()))
             db.execute("UPDATE monitors SET rule_id=?,state='{}',health='unknown' WHERE id=?", (new_id, monitor_id))
             self._audit(db, monitor_id, "rule_changed", old, {"id": new_id, "config": config})
         return self.detail(monitor_id)
@@ -247,6 +251,9 @@ class Store:
                     raise ValueError("标准化结果的资产类型与监控对象不一致")
                 data = observation.model_dump(mode="json")
                 observed_at = observation.observed_at.isoformat()
+            except NoLivePosition as exc:
+                self._reject(raw_id, monitor_id, 'unavailable', str(exc))
+                return {'raw_id':raw_id,'outcome':'unavailable','events':[]}
             except (ValueError, KeyError, TypeError) as exc:
                 self._reject(raw_id, monitor_id, "invalid", str(exc))
                 return {"raw_id": raw_id, "outcome": "invalid", "events": []}

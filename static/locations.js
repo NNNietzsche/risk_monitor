@@ -1,6 +1,6 @@
 'use strict';
 (() => {
-  const airports = {HND:'东京羽田',NRT:'东京成田',DLC:'大连周水子',PVG:'上海浦东',SHA:'上海虹桥'};
+  const airports = {HND:'东京羽田',NRT:'东京成田',DLC:'大连周水子',PVG:'上海浦东',SHA:'上海虹桥',MEL:'墨尔本'};
   function inRing(x,y,ring) {
     let inside=false;
     for(let i=0,j=ring.length-1;i<ring.length;j=i++){

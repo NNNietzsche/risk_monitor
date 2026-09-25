@@ -15,7 +15,7 @@ def timeline_assessment(row, evaluation, events):
             return result | {"tone":"warning", "label":"持续关注", "description":"；".join(e["summary"] for e in events) + f"；延误仍为 {delay:g} 分钟，超过 {threshold} 分钟阈值。"}
         return result | {"tone":{"info":"normal","warning":"warning","high":"danger"}[highest], "label":{"info":"状态恢复","warning":"关注","high":"风险"}[highest], "description":"；".join(e["summary"] for e in events)}
     data = row["data"]
-    if data["kind"] == "aircraft":
+    if data["kind"] == "aircraft" and not evidence.get('flight_risk_assessed'):
         return result | {"tone":"unknown", "label":"仅位置", "description":"飞机定位已更新；此监控仅评估位置，未评估航班延误、取消或备降。"}
     if data["kind"] == "vessel":
         inside = evidence.get("inside")

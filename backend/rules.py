@@ -1,6 +1,6 @@
 """Pure deterministic rules; no AI, I/O or clock reads."""
 from datetime import datetime
-ENGINE_VERSION = "1.0.0"
+ENGINE_VERSION = "1.1.0"
 
 
 def evaluate(target, observation):
@@ -30,7 +30,20 @@ def evaluate(target, observation):
         evidence.update(operator="position_available", capabilities=["position"], flight_risk_assessed=False)
         if observation.get("latitude") is None or observation.get("longitude") is None:
             return None, "missing", evidence, events
-        return {"position_available":True,"flight_risk_assessed":False}, "evaluated", evidence, events
+        fid=observation.get('flight_source_ref')
+        basis=config.get('delay_basis','departure')
+        has_times=observation.get('scheduled_'+basis) and (observation.get('actual_'+basis) or observation.get('estimated_'+basis))
+        if ('current_flight' in config.get('capabilities',[]) and fid and observation.get('flight_status')
+                and (has_times or observation['flight_status'] in {'cancelled','diverted'})):
+            # Risk state belongs to a single flight, even though the monitor stays on the aircraft.
+            flight_target={**target,'kind':'flight','flight':observation,
+                           'state':previous if previous.get('flight_source_ref')==fid else {}}
+            state,quality,flight_evidence,events=evaluate(flight_target,observation)
+            flight_evidence.update(flight_source_ref=fid,flight_number=observation.get('flight_number'),
+                                  aircraft_registration=target['asset']['registration'],flight_risk_assessed=True)
+            return {**state,'position_available':True,'flight_risk_assessed':True,'flight_source_ref':fid},quality,flight_evidence,events
+        preserved=previous if fid and previous.get('flight_source_ref')==fid else {}
+        return {**preserved,"position_available":True,"flight_risk_assessed":False,"flight_source_ref":fid}, "evaluated", evidence, events
 
     status, basis = observation.get("flight_status"), config["delay_basis"]
     actual, estimated = observation.get("actual_" + basis), observation.get("estimated_" + basis)

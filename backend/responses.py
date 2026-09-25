@@ -17,6 +17,7 @@ class SourceOut(BaseModel):
     min_poll_seconds: int | None = None
     max_age_seconds: int | None = None
     reference_label: str | None = None
+    profile_mode: str = 'manual_fallback'
 
 
 class RegionOut(BaseModel):

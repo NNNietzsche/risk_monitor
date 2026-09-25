@@ -7,13 +7,13 @@
     <title>资产风险监控日报</title>
 
     <link rel="stylesheet" href="/static/reference.css">
-<link rel="stylesheet" href="/static/app.css">
-<script src="/static/maps.js?v=20260924-sdk" defer></script>
-<script src="/static/locations.js?v=20260924-sdk" defer></script>
-<script src="/static/public-targets.js?v=20260924-sdk" defer></script>
-<script src="/static/target-presenter.js?v=20260924-sdk" defer></script>
-<script src="/static/management.js?v=20260924-sdk" defer></script>
-<script src="/static/app.js?v=20260924-sdk" defer></script>
+<link rel="stylesheet" href="/static/app.css?v=20260925-aircraft2">
+<script src="/static/maps.js?v=20260925-aircraft2" defer></script>
+<script src="/static/locations.js?v=20260925-aircraft2" defer></script>
+<script src="/static/public-targets.js?v=20260925-aircraft2" defer></script>
+<script src="/static/target-presenter.js?v=20260925-aircraft2" defer></script>
+<script src="/static/management.js?v=20260925-aircraft2" defer></script>
+<script src="/static/app.js?v=20260925-aircraft2" defer></script>
 </head>
 
 <body>
@@ -99,7 +99,7 @@
 ========================================================= -->
 
 <main class="container">
-  <div class="page-heading"><div><div class="eyebrow">ASSET RISK MONITORING</div><h1>资产风险监控日报</h1><p class="muted">指定船舶、航班实例及公开风险信息动态监控</p></div><div class="updated">最近刷新 <span id="updated">—</span><br><span class="badge" id="data-mode">正在读取数据源</span></div></div>
+  <div class="page-heading"><div><div class="eyebrow">ASSET RISK MONITORING</div><h1>资产风险监控日报</h1><p class="muted">指定船舶、飞机实体、航班及公开风险信息动态监控</p></div><div class="updated">最近刷新 <span id="updated">—</span><br><span class="badge" id="data-mode">正在读取数据源</span></div></div>
   <p class="map-note" id="source-attribution">正在读取数据源说明</p><div class="toolbar"><div class="actions"><button class="primary" id="add">＋ 添加监控对象</button><button id="public-targets">接入公开数据</button><button id="seed">载入演示数据</button><button id="manage">目标与区域管理</button><button id="refresh">更新页面（不采集）</button></div><span class="muted" id="schedule">正在读取采集设置</span></div>
   <div id="notice" role="status" aria-live="polite"></div>
   <div class="summary-grid" id="summary"></div>

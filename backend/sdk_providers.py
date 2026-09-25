@@ -10,6 +10,31 @@ from .live_providers import FetchError
 from .models import Observation
 
 
+class NoLivePosition(ValueError):
+    """A successful registration lookup contained no current position."""
+
+
+def category_text(value):
+    if isinstance(value,dict):value=value.get('text') or value.get('name')
+    return value.strip() if isinstance(value,str) and value.strip() else None
+
+
+def flight_values(body):
+    times=body.get('time') or {}
+    real=times.get('real') or {}
+    generic=(((body.get('status') or {}).get('generic') or {}).get('status') or {}).get('text','').lower()
+    status={'canceled':'cancelled','cancelled':'cancelled','diverted':'diverted'}.get(generic)
+    if status is None:
+        if real.get('arrival'):status='landed'
+        elif real.get('departure'):status='active'
+        elif generic in {'scheduled','estimated','delayed'}:status='scheduled'
+    values={'flight_status':status}
+    for prefix,source in [('scheduled',times.get('scheduled') or {}),('actual',real),('estimated',times.get('estimated') or {})]:
+        for side in ['departure','arrival']:
+            if source.get(side):values[prefix+'_'+side]=epoch(source[side])
+    return values
+
+
 def epoch(value):
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
         raise ValueError('来源缺少有效时间戳')
@@ -117,24 +142,54 @@ class FlightRadarProvider:
     def fetch(self,target,scenario,now):
         kind='flight' if target['kind']=='flight' else 'registration'
         ref=target['rule']['config']['source_ref'] if kind=='flight' else target['asset']['registration']
-        return self.gateway.run(self.name,(kind,ref),lambda:self.request(kind,ref))
-    def normalize(self,payload,target):
-        if target['kind']=='flight':return self._flight(payload,target)
+        payload=self.gateway.run(self.name,(kind,ref),lambda:self.request(kind,ref))
+        if kind=='flight':return payload
+        matches=self._matches(payload,target)
+        if len(matches)!=1:return payload
+        fid=matches[0].id
+        try:
+            detail=self.gateway.run(self.name,('flight',fid),lambda:self.request('flight',fid))
+            return {**payload,'current_flight_detail':detail}
+        except (ValueError,ConnectionError,TimeoutError) as exc:
+            # Optional detail failure must not discard a valid primary position.
+            return {**payload,'current_flight_detail_error':getattr(exc,'payload',{'error':str(exc)})}
+
+    def _matches(self,payload,target):
         from FlightRadarAPI.entities.flight import Flight
         matches=[]
         for fid,raw in payload['body'].items():
             if not isinstance(raw,list) or len(raw)<19:continue
             f=Flight(fid,raw)
             if f.registration==target['asset']['registration']:matches.append(f)
+        return matches
+
+    def normalize(self,payload,target):
+        if target['kind']=='flight':return self._flight(payload,target)
+        matches=self._matches(payload,target)
+        if not matches:raise NoLivePosition('注册号查询成功，但来源当前未提供该飞机的实时位置；不能据此确认停飞或失联')
         if len(matches)!=1:raise ValueError('该注册号当前无唯一有效飞机定位')
         f=matches[0]
         expected=target['rule']['config'].get('icao24')
         if expected and str(f.icao_24bit).lower()!=expected:raise ValueError('飞机 ICAO24 与注册号不一致')
+        values={}
+        model=f.aircraft_code or None
+        detail=(payload.get('current_flight_detail') or {}).get('body') or {}
+        identity=detail.get('identification') or {};aircraft=detail.get('aircraft') or {}
+        # Join by BOTH live flight ID and aircraft registration. Never reuse yesterday's flight.
+        if detail and identity.get('id')==f.id and aircraft.get('registration')==f.registration:
+            model=(aircraft.get('model') or {}).get('text') or model
+            values['aircraft_category']=category_text(aircraft.get('category'))
+            detail_airports=detail.get('airport') or {}
+            route_matches=all(((detail_airports.get(side) or {}).get('code') or {}).get('iata')==code
+                              for side,code in [('origin',f.origin_airport_iata),('destination',f.destination_airport_iata)])
+            if route_matches and (identity.get('number') or {}).get('default')==f.number:
+                values.update(flight_values(detail))
         return Observation(kind='aircraft',observed_at=epoch(f.time),latitude=f.latitude,longitude=f.longitude,
-            callsign=f.callsign or None,aircraft_type=f.aircraft_code or None,
+            position_observed_at=epoch(f.time),flight_number=f.number or None,flight_source_ref=f.id,
+            callsign=f.callsign or None,aircraft_type=model,
             departure=f.origin_airport_iata if re.fullmatch('[A-Z]{3}',f.origin_airport_iata or '') else None,
             arrival=f.destination_airport_iata if re.fullmatch('[A-Z]{3}',f.destination_airport_iata or '') else None,
-            navigation_status='on_ground' if f.on_ground else 'airborne')
+            navigation_status='on_ground' if f.on_ground else 'airborne',**values)
     def _flight(self,payload,target):
         b=payload['body'];flight=target['flight'];identity=b.get('identification') or {}
         if identity.get('id')!=target['rule']['config']['source_ref']:raise ValueError('航班来源编号不匹配')

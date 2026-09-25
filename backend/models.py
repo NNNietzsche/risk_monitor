@@ -136,6 +136,11 @@ class Observation(StrictModel):
     aircraft_type: str | None = None
     vessel_type: str | None = None
     aircraft_role: str | None = None
+    aircraft_category: str | None = Field(default=None, max_length=120)
+    flight_number: str | None = Field(default=None, max_length=30)
+    flight_source_ref: str | None = Field(default=None, max_length=64)
+    scheduled_departure: datetime | None = None
+    scheduled_arrival: datetime | None = None
     location_name: str | None = Field(default=None, max_length=120)
     departure: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
     arrival: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
@@ -148,7 +153,7 @@ class Observation(StrictModel):
 
     @model_validator(mode="after")
     def times(self):
-        for key in ("observed_at", "position_observed_at", "estimated_departure", "actual_departure", "estimated_arrival", "actual_arrival"):
+        for key in ("observed_at", "position_observed_at", "scheduled_departure", "scheduled_arrival", "estimated_departure", "actual_departure", "estimated_arrival", "actual_arrival"):
             value = getattr(self, key)
             if value is not None:
                 setattr(self, key, utc(value))
