@@ -8,15 +8,11 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from .live_providers import FetchError
 from .models import Observation
+from .fr24_category import category_request, CATEGORIES
 
 
 class NoLivePosition(ValueError):
     """A successful registration lookup contained no current position."""
-
-
-def category_text(value):
-    if isinstance(value,dict):value=value.get('text') or value.get('name')
-    return value.strip() if isinstance(value,str) and value.strip() else None
 
 
 def flight_values(body):
@@ -78,6 +74,7 @@ class SDKGateway:
 
 
 def fr24_request(kind, value):
+    if kind=='category':return category_request(value)
     # Use the SDK transport and entity parser, avoiding get_flights' hidden
     # empty-feed retries. A scoped session also guarantees resource cleanup.
     from FlightRadarAPI.request import APIRequest
@@ -147,12 +144,20 @@ class FlightRadarProvider:
         matches=self._matches(payload,target)
         if len(matches)!=1:return payload
         fid=matches[0].id
+        payload=dict(payload)
         try:
             detail=self.gateway.run(self.name,('flight',fid),lambda:self.request('flight',fid))
-            return {**payload,'current_flight_detail':detail}
+            payload['current_flight_detail']=detail
         except (ValueError,ConnectionError,TimeoutError) as exc:
             # Optional detail failure must not discard a valid primary position.
-            return {**payload,'current_flight_detail_error':getattr(exc,'payload',{'error':str(exc)})}
+            payload['current_flight_detail_error']=getattr(exc,'payload',{'error':str(exc)})
+        try:
+            # Separate backoff: a metadata outage must not block the position feed.
+            payload['aircraft_category_detail']=self.gateway.run(
+                self.name+'-category',fid,lambda:self.request('category',fid))
+        except (ValueError,ConnectionError,TimeoutError) as exc:
+            payload['aircraft_category_error']=getattr(exc,'payload',{'error':str(exc)})
+        return payload
 
     def _matches(self,payload,target):
         from FlightRadarAPI.entities.flight import Flight
@@ -178,12 +183,17 @@ class FlightRadarProvider:
         # Join by BOTH live flight ID and aircraft registration. Never reuse yesterday's flight.
         if detail and identity.get('id')==f.id and aircraft.get('registration')==f.registration:
             model=(aircraft.get('model') or {}).get('text') or model
-            values['aircraft_category']=category_text(aircraft.get('category'))
             detail_airports=detail.get('airport') or {}
             route_matches=all(((detail_airports.get(side) or {}).get('code') or {}).get('iata')==code
                               for side,code in [('origin',f.origin_airport_iata),('destination',f.destination_airport_iata)])
             if route_matches and (identity.get('number') or {}).get('default')==f.number:
                 values.update(flight_values(detail))
+        category=(payload.get('aircraft_category_detail') or {}).get('body') or {}
+        info=category.get('aircraftInfo') or {};flight_info=category.get('flightInfo') or {}
+        # This is the map website's field, not the legacy clickhandler aircraft object.
+        if info.get('reg')==f.registration and flight_info.get('flightId')==int(f.id,16):
+            service=info.get('service')
+            values['aircraft_category']=CATEGORIES.get(service) if type(service) is int else None
         return Observation(kind='aircraft',observed_at=epoch(f.time),latitude=f.latitude,longitude=f.longitude,
             position_observed_at=epoch(f.time),flight_number=f.number or None,flight_source_ref=f.id,
             callsign=f.callsign or None,aircraft_type=model,

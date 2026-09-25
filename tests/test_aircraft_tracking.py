@@ -24,12 +24,12 @@ def test_current_flight_rollover_keeps_registration_and_scopes_risk(tmp_path):
     store=create_app(tmp_path/'roll.db',interval=0).state.store;m=target(store)
     now=int(datetime.now(timezone.utc).timestamp())-20
     detail=flight_body(now);detail['aircraft']['model']['text']='Boeing 767-381F(ER)'
-    detail['aircraft']['category']='Cargo'
     for idx,(fid,number) in enumerate([('abcdef12','NH8501'),('abcdef13','NH8502')]):
         tick=now+idx;detail['identification']['id']=fid;detail['identification']['number']['default']=number
         calls=[]
         def request(kind,ref):
             calls.append((kind,ref))
+            if kind=='category':return {'body':{'aircraftInfo':{'reg':'JA602F','service':1},'flightInfo':{'flightId':int(fid,16)}}}
             return {'body':{fid:row(tick,number)} if kind=='registration' else deepcopy(detail)}
         store.providers[m['provider']]=FlightRadarProvider(SDKGateway(),request)
         unlock(store,m['id']);result=store.poll(m['id'])
@@ -39,7 +39,7 @@ def test_current_flight_rollover_keeps_registration_and_scopes_risk(tmp_path):
         assert current['latest']['data']['flight_number']==number
         assert current['business']['category_label']=='Cargo'
         assert current['business']['aircraft_model']=='Boeing 767-381F(ER)'
-        assert calls==[('registration','JA602F'),('flight',fid)]
+        assert calls==[('registration','JA602F'),('flight',fid),('category',fid)]
         assert store.event_detail(result['events'][0])['evidence']['flight_source_ref']==fid
     assert len(store.monitors())==1 and len(current['observations'])==2
 

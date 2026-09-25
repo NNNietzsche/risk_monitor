@@ -5,10 +5,13 @@
 ## 数据流与边界
 
 1. Provider 用注册号查询位置 feed，核对注册号（配置 ICAO24 时还核对 ICAO24）。标准化保存航班号、来源航班 ID、航线、位置及原始位置时间。
-2. 有唯一有效飞机时，按本次 feed 返回的 ID 查询一次航班详情。同一 ID 与注册号都匹配才补充机型、分类；航班号与机场也匹配才采用时刻与航班状态。
-3. 单次采集最多一次 feed + 一次详情；30 分钟自动采集、分组手动刷新、5 分钟最短间隔和共享缓存/失败冷却保留。详情失败保留主位置响应，错误附入原始证据，不丢掉有效定位。
-4. FlightRadarAPI 当前实网返回 model.text，但已核对的 feed、详情和注册号公开页面没有 AIRCRAFT CATEGORY。仅映射明确的 aircraft.category（字符串，或 text/name），缺失显示“分类未提供”，不能从 B789/B763、航空公司名称猜客货用途。当前部署不增加网页抓取。
-5. 原始 feed 与详情合并为一次证据快照，标准化数据保留 flight_source_ref、flight_number、计划/预计/实际时刻。具有完整时刻时复用确定性延误规则；比较状态按 flight_source_ref 隔离，新航班重新计算，详情缺失不能声称航班风险正常。
+2. 有唯一有效飞机时，按本次 feed 返回的 ID 查询一次航班详情。同一 ID 与注册号都匹配才补充机型；航班号与机场也匹配才采用时刻与航班状态。
+3. 单次采集最多一次 feed + 一次旧版航班详情 + 一次公开 gRPC 分类详情；30 分钟自动采集、分组手动刷新、5 分钟最短间隔和共享缓存/失败冷却保留。详情失败保留主位置响应，错误附入原始证据，不丢掉有效定位。
+4. AIRCRAFT CATEGORY 使用网页实际采用的 `FlightDetailsResponse.aircraftInfo.service` 枚举，接口为 `https://data-feed.flightradar24.com/fr24.feed.api.v1.Feed/FlightDetails`。按网页英文词典映射；0 为 Passenger、1 为 Cargo，字段缺失不能默认成 0。未知代码/缺失显示“分类未提供”，不从机型或航空公司猜测。只请求 guest / NOT_VISIBLE；没有登录令牌，不请求付费限制字段。分类请求与位置 feed 独立失败冷却，不影响定位。完整二进制请求/响应以 Base64 保留，连同抓取时间、映射版本和解码字段进入原始证据。仅注册号及本次 flight ID 都匹配时采用分类。
+   - 网页核对日期：2026-09-25。显示组件 `Aircraft.vue_vue_type_script_setup_true_lang-B81sjg9O.js` 调用共享模块 `__modulepreload__-Brl2EGgi.js` 的 service 映射；英文词典为 `en-DqYQHsMv.js`。这些网页代码仅用于核对协议，不纳入项目、不在运行时下载执行。
+   - 实际 B-20EC / flight ID 41d21f1a 返回 service=0，已由适配器验证显示 Passenger。公开网页内部协议可能变化；改动封装在 Provider 内，Dashboard 和规则仍只依赖统一 Observation。
+   - 此前错误地假设旧版 JSON 的 aircraft.category 对应网页字段；原测试同样模拟了假设字段，因此没有发现接入缺口。后续新增供应商字段必须先核对真实响应和身份关联，再编写缺失/零值/失败测试，不能仅以自拟 Mock 宣称已接通。
+5. 原始 feed、航班详情与分类详情合并为一次证据快照，标准化数据保留 flight_source_ref、flight_number、计划/预计/实际时刻。具有完整时刻时复用确定性延误规则；比较状态按 flight_source_ref 隔离，新航班重新计算，详情缺失不能声称航班风险正常。
 6. 成功返回空 feed 为 unavailable，显示“暂无实时位置”，保留历史位置并标记历史；不是停飞或失联结论。仍按原计划继续查询。未获取的后续计划航班、已经结束且不再出现在 feed 中的最终到达时间无法保证补全。
 
 ## 历史转换
@@ -35,3 +38,10 @@ python -m backend.convert_aircraft --db <数据库路径> --registration JA602F 
 - 保留两个监控 ID，将 JA602F、B-20EC 转为飞机实体。仅手动刷新航空一次：B-20EC 返回 HO1656 / MEL → PVG、Boeing 787-9 Dreamliner；JA602F 返回空 feed，状态为 unavailable，旧观测保留。
 - HTTPS 页面、受保护 API、资源版本及 1800 秒调度验证通过；未登录仍为 401。没有修改站点凭据或调用新增船舶接口。
 - 前端 8 项测试通过；浏览器验证新建 FR24 飞机监控隐藏人工机型/用途字段、注册号显示及中文航线。实际仓库另外复核了 13 项飞机/页面测试。
+
+
+## AIRCRAFT CATEGORY 修正发布
+
+- 2026-09-25 09:52 JST 发布，备份 `/var/backups/risk-monitor/20260925T005231Z-category`。后端 80 项测试通过，包含分类显式零值、缺失/未知枚举、截断响应、权限错误、身份不匹配及分类失败不阻断定位。
+- 09:53 JST 只手动刷新航空分组一次，B-20EC / HO1656 返回 Passenger，JA602F 重新出现实时定位 / NH8441，返回 Cargo。HTTPS API 与浏览器列表均验证了两项英文分类；B-20EC 的二进制原始响应、service=0 及映射版本已核对入库。
+- 未修改船舶 Provider；自动采集仍为 1800 秒。仅在有唯一实时飞机时追加一次分类查询，页面读取不会调用外部接口。网页未承诺接口稳定性，后续协议调整集中修改适配器。
