@@ -4,14 +4,6 @@ VESSEL_TYPES={'container':'集装箱船','tanker':'油轮','liquid_cargo':'液�
 AIRCRAFT_ROLES={'passenger':'客机','cargo':'货机','mixed':'客货混合','other':'其他用途'}
 
 
-def ais_vessel_type(code):
-    if not isinstance(code,int):return None
-    if 60<=code<=69:return 'passenger'
-    if 70<=code<=79:return 'cargo'
-    if 80<=code<=89:return 'liquid_cargo'
-    return {50:'pilot',52:'tug',30:'fishing'}.get(code)
-
-
 def describe_profile(monitor):
     manual=monitor['profile'];data=(monitor.get('latest') or {}).get('data',{})
     kind=monitor['kind']

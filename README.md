@@ -2,10 +2,9 @@
 
 新增 FlightRadarAPI 和本地 MarineTrafficAPI 实验接入，默认每 30 分钟采集，船舶/航空分别手动刷新。接入边界、样例和 SDK 升级方式见 [SDK 接入说明](docs/sdk-integration.md)，服务器访问与运维见 [测试部署](docs/server-test.md)。
 
-原有 Digitraffic 真实 AIS 和 ADSB.lol 飞机位置接入继续保留。页面“接入公开数据”仍用于这两个来源的候选发现；新 SDK 目标通过“添加监控对象”或显式测试清单导入。FR24 已支持当天航班时刻，ADSB.lol 仍只提供飞机位置。原有来源配置见 [公开数据接入](docs/public-data.md)。
+本系统独立运行，导航只保留资产监控内容。真实数据源为 Flightradar24（FlightRadarAPI）与 MarineTraffic API；通过“添加监控对象”接入。旧 Digitraffic、ADSB.lol 适配器及候选发现入口已移除，历史数据保留。模拟源仅用于明确标识的演示与规则验证。
 
-
-在原 `demo.html` 的导航和视觉布局上实现的本地端到端 MVP。Python / FastAPI 同时提供页面和 API，SQLite 保存记录，无需单独安装 Node 或前端开发服务器。
+Python / FastAPI 同时提供页面和 API，SQLite 保存记录，无需单独安装 Node 或前端开发服务器。线上入口为 https://monitor.bocom-tokyo.site/ ，主域名 https://bocom-tokyo.site/ 自动跳转。当前共享测试账号为 `test`，密码为 `test`，由 Caddy 验证；本地服务仅绑定回环地址。
 
 ## 启动
 
@@ -16,17 +15,17 @@
 .\Start.ps1
 ```
 
-打开 http://127.0.0.1:8000/asset-risk.html 。如本机策略不允许运行脚本，可用 `powershell -ExecutionPolicy Bypass -File .\Setup.ps1` 和同样方式运行 Start.ps1（仅对本次进程生效）。
+打开 http://127.0.0.1:8000/ 。如本机策略不允许运行脚本，可用 `powershell -ExecutionPolicy Bypass -File .\Setup.ps1` 和同样方式运行 Start.ps1（仅对本次进程生效）。
 
 验证模拟规则时点击“载入演示数据”，创建一条船舶、一条当天航班及一条明确标记的虚构公开信息，同时演示船舶进入区域和航班延误。后续分别点击船舶/航空面板的刷新按钮，或等待默认 30 分钟自动采集；直接使用 uvicorn 启动也采用此默认值。设置 `RISK_POLL_SECONDS=0` 可关闭。页面每 15 秒只读取本地记录，不调用外部数据源。修改已有 `.env` 的采集间隔后需重启。
 
 列表展示船型、机型和客货用途；来源未提供时显示未分类，可在目标详情中维护。通过“目标与区域管理”删除或恢复目标及区域；删除停止采集并保留历史证据，恢复后保持暂停。在用区域（包括暂停目标引用）不能删除。字段对照、限制和偏差复盘见 [界面验收约定](docs/ui-acceptance.md)。
 
-通过“接入公开数据”添加真实目标；模拟源的标识、MMSI、航班号仍不代表真实资产。数据库位于 `data/risk.db`，不提交 Git。测试使用临时数据库。
+通过“添加监控对象”添加真实目标；模拟源的标识、MMSI、航班号仍不代表真实资产。数据库位于 `data/risk.db`，不提交 Git。测试使用临时数据库。
 
 ## 已实现
 
-- 原导航 href 完整保留，当前只实现资产风险页面，其余模块须由宿主系统提供。
+- 独立监控首页；根路径直接展示页面，旧 `/asset-risk.html`、`/demo.html` 重定向到根路径。
 - 添加船舶、飞机实体、具体日期的航班、矩形风险区域；同一飞机实体可关联多天航班。
 - 船舶区域内外判断、首次发现位于区域内、进入和离开事件；边界计入区域。
 - 起飞/到达延误严格大于阈值触发，实际时间优先；取消、备降、状态恢复、延误恢复。
@@ -51,12 +50,12 @@
 
 - API 文档：`/docs`；契约文件 `docs/openapi.json`。
 - `GET /api/v1/dashboard` 为页面汇总；核心 API、ER 和 Provider 设计见 `docs/architecture.md`、`docs/api-contract.md`、`docs/provider-integration.md`。
-- 新页面接口与宿主对接见 `docs/portal-integration.md`。
+- 页面与 API 由同一服务提供，见 `docs/portal-integration.md`。
 - 页面资源仅来自 `/static/`，FastAPI 不公开仓库目录、数据库或环境文件。
-- 本地版本绑定 127.0.0.1，无用户认证。接入行内系统时由宿主统一处理身份、权限、审计操作者、页面路由和同源反向代理；再接商业授权 Provider。不要直接把当前开发服务公开到网络。
+- 本地版本绑定 127.0.0.1；服务器通过 Caddy 提供 HTTPS 和全站 Basic Auth，8000 端口不对外开放。当前使用共享测试账号，未建立独立用户和权限系统。
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-本仓库保留最初静态蓝图的 Git 历史；所有导航链接的目标名称不变。无部署或远端推送步骤。
+本仓库保留最初静态蓝图的 Git 历史；部署方式见 `docs/server-test.md`。更新前备份代码、配置和数据库。

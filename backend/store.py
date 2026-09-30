@@ -8,7 +8,6 @@ from pathlib import Path
 from .models import MonitorCreate, RegionCreate
 from .providers import VESSEL_SCENARIOS, FLIGHT_SCENARIOS
 from .rules import ENGINE_VERSION, evaluate
-from .live_providers import PublicHTTP
 from .provider_registry import create_registry
 from .migrations import migrate_aircraft, migrate_management
 from .business_profile import describe_profile
@@ -62,8 +61,7 @@ class Store:
         self.path = str(path)
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
-        self.public_http = PublicHTTP()
-        self.registry = create_registry(self.public_http)
+        self.registry = create_registry()
         self.providers = self.registry.providers
         with self.connection() as db:
             db.executescript(Path(__file__).with_name("schema.sql").read_text(encoding="utf-8"))

@@ -4,16 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>资产风险监控日报</title>
+    <title>资产风险监控</title>
 
     <link rel="stylesheet" href="/static/reference.css">
-<link rel="stylesheet" href="/static/app.css?v=20260925-aircraft2">
-<script src="/static/maps.js?v=20260925-aircraft2" defer></script>
-<script src="/static/locations.js?v=20260925-aircraft2" defer></script>
-<script src="/static/public-targets.js?v=20260925-aircraft2" defer></script>
-<script src="/static/target-presenter.js?v=20260925-aircraft2" defer></script>
-<script src="/static/management.js?v=20260925-aircraft2" defer></script>
-<script src="/static/app.js?v=20260925-aircraft2" defer></script>
+<link rel="stylesheet" href="/static/app.css?v=20260930-standalone">
+<script src="/static/maps.js?v=20260930-standalone" defer></script>
+<script src="/static/locations.js?v=20260930-standalone" defer></script>
+<script src="/static/target-presenter.js?v=20260930-standalone" defer></script>
+<script src="/static/management.js?v=20260930-standalone" defer></script>
+<script src="/static/app.js?v=20260930-standalone" defer></script>
 </head>
 
 <body>
@@ -32,11 +31,11 @@
 
         <div>
             <div class="logo-title">
-                Risk Intelligence
+                Asset Monitor
             </div>
 
             <div class="logo-subtitle">
-                企业风险情报监控系统
+                船舶与航空监控
             </div>
         </div>
 
@@ -59,57 +58,21 @@
 
 
 <!-- =========================================================
-     Navigation
-========================================================= -->
-
-<nav class="nav">
-
-    <!-- 纯静态 HTML，所以使用 .html 文件 -->
-
-    <a href="index.html">
-        首页
-    </a>
-
-    <a href="daily-news.html">
-        每日新闻
-    </a>
-
-    <a href="asset-risk.html"
-       class="active">
-        资产风险监控日报
-    </a>
-
-    <a href="entity-assessment.html">
-        主体评估
-    </a>
-
-    <a href="deep-reports.html">
-        深度报告
-    </a>
-
-    <a href="intl-ratings.html">
-        国际评级
-    </a>
-
-</nav>
-
-
-<!-- =========================================================
      Main
 ========================================================= -->
 
 <main class="container">
-  <div class="page-heading"><div><div class="eyebrow">ASSET RISK MONITORING</div><h1>资产风险监控日报</h1><p class="muted">指定船舶、飞机实体、航班及公开风险信息动态监控</p></div><div class="updated">最近刷新 <span id="updated">—</span><br><span class="badge" id="data-mode">正在读取数据源</span></div></div>
-  <p class="map-note" id="source-attribution">正在读取数据源说明</p><div class="toolbar"><div class="actions"><button class="primary" id="add">＋ 添加监控对象</button><button id="public-targets">接入公开数据</button><button id="seed">载入演示数据</button><button id="manage">目标与区域管理</button><button id="refresh">更新页面（不采集）</button></div><span class="muted" id="schedule">正在读取采集设置</span></div>
+  <div class="page-heading"><div><div class="eyebrow">ASSET RISK MONITORING</div><h1>资产风险监控</h1></div><div class="updated">最近刷新 <span id="updated">—</span><br><span class="badge" id="data-mode">正在读取数据源</span></div></div>
+  <p class="source-attribution" id="source-attribution">正在读取数据源说明</p><div class="toolbar"><div class="actions"><button class="primary" id="add">＋ 添加监控对象</button><button id="seed">载入演示数据</button><button id="manage">目标与区域管理</button><button id="refresh">刷新页面</button></div><span class="muted" id="schedule">正在读取采集设置</span></div>
   <div id="notice" role="status" aria-live="polite"></div>
   <div class="summary-grid" id="summary"></div>
-  <section class="section"><div class="section-heading"><h2>指定目标跟踪</h2><span class="muted">点击目标查看状态、规则和原始记录</span></div><div class="tracking-grid">
-    <article class="panel"><div class="panel-heading"><h3>船舶跟踪</h3><div class="actions"><span id="vessel-count" class="badge" aria-live="polite">— 艘</span><button id="refresh-vessels">刷新船舶</button></div></div><div id="vessel-map" class="coordinate-map" aria-label="船舶世界地图"></div><p class="map-note">显示最近一次采集位置（非实时） · 矩形为监控区域 · 支持拖动、缩放和点击目标。</p><div id="vessels" class="target-list"></div></article>
-    <article class="panel"><div class="panel-heading"><h3>航空跟踪</h3><div class="actions"><span id="flight-count" class="badge" aria-live="polite">— 个航班</span><button id="refresh-aviation">刷新航空</button></div></div><div id="flight-map" class="coordinate-map" aria-label="航空世界地图"></div><p class="map-note">显示最近一次采集位置（非实时），航班实例单独跟踪 · 灰色为历史定位 · 无数据不猜测位置。</p><div id="flights" class="target-list"></div></article>
+  <section class="section"><div class="section-heading"><h2>指定目标跟踪</h2></div><div class="tracking-grid">
+    <article class="panel"><div class="panel-heading"><h3>船舶跟踪</h3><div class="actions"><span id="vessel-count" class="badge" aria-live="polite">— 艘</span><button id="refresh-vessels">刷新船舶</button></div></div><div id="vessel-map" class="coordinate-map" aria-label="船舶世界地图"></div><p class="map-note">最近采集位置 · 矩形为监控区域</p><div id="vessels" class="target-list"></div></article>
+    <article class="panel"><div class="panel-heading"><h3>航空跟踪</h3><div class="actions"><span id="flight-count" class="badge" aria-live="polite">— 个航班</span><button id="refresh-aviation">刷新航空</button></div></div><div id="flight-map" class="coordinate-map" aria-label="航空世界地图"></div><p class="map-note">最近采集位置 · 灰色为历史定位</p><div id="flights" class="target-list"></div></article>
   </div></section>
   <section class="section" aria-labelledby="timeline-title">
     <div class="section-header timeline-heading">
-      <div><h2 id="timeline-title" class="section-title">目标动态时间线</h2><p class="section-description">指定船舶及飞机最近动态 · 状态更新与风险事件 · 每页 10 条</p></div>
+      <div><h2 id="timeline-title" class="section-title">目标动态时间线</h2><p class="section-description">状态更新与风险事件</p></div>
       <div class="actions timeline-filters">
         <select id="timeline-kind" aria-label="目标类型"><option value="">全部目标</option><option value="vessel">船舶</option><option value="flight">航班</option><option value="aircraft">飞机实体</option></select>
         <select id="timeline-type" aria-label="动态类型"><option value="all">全部动态</option><option value="events">仅规则事件</option><option value="quality">数据质量</option></select>
@@ -118,8 +81,8 @@
     </div>
     <div class="timeline-shell"><div id="timeline" class="timeline"></div><div class="pagination"><button id="timeline-latest">回到最新</button><button id="timeline-prev">上一页</button><span id="timeline-page" aria-live="polite"></span><button id="timeline-next">下一页</button></div></div>
   </section>
-  <section class="section panel"><div class="panel-heading"><h2>公开风险信息</h2><button id="add-news">录入公开信息</button></div><p class="muted section-note">来源内容供查阅和分析，未经规则验证的新闻不会直接改变目标状态。</p><div id="news"></div></section>
-  <section class="section panel"><div class="panel-heading"><div><h2>AI 风险解释</h2><p class="muted">可选功能 · 仅在成功生成后更新分析</p></div><button id="ai-refresh">更新 AI 分析</button></div><div class="ai-controls"><label><input type="checkbox" id="ai-enabled">启用 AI</label><label><input type="checkbox" id="ai-auto">资料变化后自动更新</label><span id="ai-state" class="muted"></span></div><p id="ai-meta" class="muted section-note"></p><div id="ai-content" class="analysis-text"></div></section>
+  <section class="section panel"><div class="panel-heading"><h2>公开风险信息</h2><button id="add-news">录入公开信息</button></div><p class="muted section-note">公开资料仅供参考，不直接改变目标风险状态。</p><div id="news"></div></section>
+  <section class="section panel"><div class="panel-heading"><div><h2>AI 风险解释</h2><p class="muted">结合目标动态与公开信息生成分析</p></div><button id="ai-refresh">更新 AI 分析</button></div><div class="ai-controls"><label><input type="checkbox" id="ai-enabled">启用 AI</label><label><input type="checkbox" id="ai-auto">资料变化后自动更新</label><span id="ai-state" class="muted"></span></div><p id="ai-meta" class="muted section-note"></p><div id="ai-content" class="analysis-text"></div></section>
   <dialog id="dialog" aria-labelledby="dialog-title"><div class="dialog-head"><h2 id="dialog-title"></h2><button id="close-dialog" aria-label="关闭">×</button></div><div id="dialog-body"></div><p id="dialog-error" role="alert"></p></dialog>
 </main>
 
@@ -131,8 +94,6 @@
 
 <footer class="footer">
 
-    Enterprise Risk Intelligence System
-    ·
     Asset Risk Monitoring
 
 </footer>

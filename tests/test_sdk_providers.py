@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from backend.app import create_app
 from backend.models import MonitorCreate
 from backend.sdk_providers import SDKGateway,MarineTrafficProvider,FlightRadarProvider
-from backend.live_providers import FetchError
+from backend.provider_errors import FetchError
 
 
 def test_sdk_backoff_cache_and_retry_after():
@@ -86,13 +86,13 @@ def test_fr24_aircraft_identity_route_and_no_implicit_flight(tmp_path):
 
 
 def test_sdk_catalog_source_reference_and_deployed_origin(tmp_path,monkeypatch):
-    monkeypatch.setenv('RISK_ALLOWED_HOSTS','risk-monitor.bocom-tokyo.site')
-    monkeypatch.setenv('RISK_ALLOWED_ORIGINS','https://risk-monitor.bocom-tokyo.site')
+    monkeypatch.setenv('RISK_ALLOWED_HOSTS','monitor.bocom-tokyo.site')
+    monkeypatch.setenv('RISK_ALLOWED_ORIGINS','https://monitor.bocom-tokyo.site')
     with TestClient(create_app(tmp_path/'api.db',interval=0)) as c:
         sources=c.get('/api/v1/public/sources').json()
         assert sources['marinetraffic-sdk-v1']['reference_label']
         assert sources['flightradar-sdk-v1']['capabilities']['flight']==['position','flight_times','flight_status']
-        assert c.post('/api/v1/poll?group=aviation',headers={'Origin':'https://risk-monitor.bocom-tokyo.site'}).status_code==200
+        assert c.post('/api/v1/poll?group=aviation',headers={'Origin':'https://monitor.bocom-tokyo.site'}).status_code==200
         assert c.post('/api/v1/poll',headers={'Origin':'https://evil.example'}).status_code==403
-        assert c.get('/api/v1/health',headers={'Host':'risk-monitor.bocom-tokyo.site'}).status_code==200
+        assert c.get('/api/v1/health',headers={'Host':'monitor.bocom-tokyo.site'}).status_code==200
         assert c.get('/api/v1/health',headers={'Host':'evil.example'}).status_code==400

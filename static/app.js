@@ -42,7 +42,7 @@ function renderMonitors(items) {
     $(id).title=`已添加 ${list.length} ${unit}，其中 ${list.filter(m=>m.enabled).length} 个监控中（数量含暂停目标）`;
   }
   for(const [id,list] of [['vessels',ships],['flights',flights]]){
-    const box=$(id);box.replaceChildren();if(!list.length)empty(box,'尚未添加目标，可接入公开数据或添加监控对象。');
+    const box=$(id);box.replaceChildren();if(!list.length)empty(box,'尚未添加目标。');
     list.forEach(m=>{
       const [status,level]=risk(m),isShip=m.kind==='vessel';
       const button=el('button',undefined,'monitor-target target-item compact-target');
@@ -119,11 +119,11 @@ async function loadTimeline(resetSnapshot=false) {
   $('timeline-prev').disabled = page.offset === 0;
   $('timeline-next').disabled = page.offset + page.limit >= page.total;
 }
-function renderNews(rows){const box=$('news');box.replaceChildren();if(!rows.length)empty(box,'暂无公开信息。可从现有系统导入，或手动录入带来源的资料。');rows.forEach(n=>{const row=el('article',undefined,'list-row'),head=el('div',undefined,'row-head');head.append(el('strong',n.title),chip(n.is_mock?'演示信息':n.category,n.is_mock?'warning':''));row.append(head,el('p',n.content),el('div',`${fmt(n.published_at)} · ${n.source}`,'time'));if(n.source_url){const a=el('a','查看原始来源','source');a.href=n.source_url;a.target='_blank';a.rel='noopener noreferrer';row.append(a);}box.append(row);});}
+function renderNews(rows){const box=$('news');box.replaceChildren();if(!rows.length)empty(box,'暂无公开信息。');rows.forEach(n=>{const row=el('article',undefined,'list-row'),head=el('div',undefined,'row-head');head.append(el('strong',n.title),chip(n.is_mock?'演示信息':n.category,n.is_mock?'warning':''));row.append(head,el('p',n.content),el('div',`${fmt(n.published_at)} · ${n.source}`,'time'));if(n.source_url){const a=el('a','查看原始来源','source');a.href=n.source_url;a.target='_blank';a.rel='noopener noreferrer';row.append(a);}box.append(row);});}
 function renderAI(s){$('ai-enabled').checked=s.enabled;$('ai-auto').checked=s.auto_refresh;$('ai-enabled').disabled=!s.configured;$('ai-auto').disabled=!s.enabled;$('ai-refresh').disabled=!s.configured||!s.enabled||s.running;
   $('ai-state').textContent=!s.configured?'未配置接口 · 核心监控照常工作':!s.enabled?'AI 已关闭':s.running?'正在生成':s.last_attempt?.status==='failed'?'调用失败，保留上次分析':s.last_attempt?.status==='success'?'最近生成成功':'已启用 · 接口可用性尚待验证';
-  $('ai-meta').textContent=s.analysis?`生成于 ${fmt(s.analysis.created_at)} · ${s.analysis.model} · ${s.analysis.prompt_version} · 依据最近最多 40 个目标、20 条规则事件和 10 条公开信息；之后的数据变化尚不一定包含在内。`:'服务端配置 AI_API_KEY、AI_MODEL 后重启，即可启用。AI 不负责采集数据或判定风险。';
-  $('ai-content').textContent=s.analysis?.content||'暂无 AI 分析。规则事件、时间线和公开信息无需 AI 即可呈现。';
+  $('ai-meta').textContent=s.analysis?`生成于 ${fmt(s.analysis.created_at)} · ${s.analysis.model} · ${s.analysis.prompt_version} · 依据最近最多 40 个目标、20 条规则事件和 10 条公开信息；之后的数据变化尚不一定包含在内。`:'AI 分析尚未启用。';
+  $('ai-content').textContent=s.analysis?.content||'暂无 AI 分析。';
 }
 async function refresh(){if(loading)return;loading=true;try{const [data,catalog]=await Promise.all([api('/dashboard'),api('/public/sources')]);dashboard=data;renderSources(catalog);renderMonitors(dashboard.monitors);const sources=new Set(dashboard.monitors.filter(m=>m.enabled).map(m=>isMock(m)?'mock':'live'));$('data-mode').textContent=sources.size>1?'测试环境：含模拟数据（详情可查）':sources.has('live')?'LIVE · 公开真实数据':'MOCK · 模拟数据';await loadTimeline(timelineOffset===0);renderNews(dashboard.news);renderAI(dashboard.ai);$('updated').textContent=fmt(dashboard.updated_at)+' JST';$('system-status').textContent=dashboard.monitors.some(m=>m.enabled&&m.health!=='ok')?'数据待关注':'监控服务已连接';}catch(e){$('system-status').textContent='服务连接失败';throw e;}finally{loading=false;}}
 function openDialog(title){$('dialog-title').textContent=title;$('dialog-body').replaceChildren();$('dialog-error').textContent='';if(!$('dialog').open)$('dialog').showModal();$('dialog').scrollTop=0;}
@@ -196,17 +196,17 @@ async function addMonitor(){
 }
 function renderSources(catalog){
   const box=$('source-attribution');box.replaceChildren();
-  Object.values(catalog).filter(s=>!s.is_mock).forEach(s=>{
+  box.append(el('span','数据源：'));
+  Object.values(catalog).filter(s=>!s.is_mock).forEach((s,index)=>{
+    if(index)box.append(el('span',' · '));
     const line=el('span');
     if(s.url&&/^https?:\/\//.test(s.url)){const a=el('a',s.name);a.href=s.url;a.target='_blank';a.rel='noopener noreferrer';line.append(a);}else line.append(el('span',s.name));
-    line.append(el('span',`（${s.license||'许可见来源说明'}）：${s.coverage}。 `));box.append(line);
+    line.append(el('span',` — ${s.coverage}`));box.append(line);
   });
-  box.append(el('span','测试围栏不代表真实风险评级。'));
 }
 
 function addRegion(){openDialog('新建风险区域');const f=el('form'),grid=el('div',undefined,'form-grid');field(grid,'区域名称','name');for(const [n,l,v] of [['west','西经度',40],['south','南纬度',10],['east','东经度',50],['north','北纬度',20]]){const input=field(grid,l,n,'number',v);input.step='any';}f.append(grid,el('p','MVP 使用矩形区域，边界计为区域内。暂不支持跨日界线。新建区域为不可变版本。','detail-note'));submit(f,'创建区域并返回',async data=>{const value=Object.fromEntries(data);for(const n of ['west','south','east','north'])value[n]=Number(value[n]);await api('/regions','POST',value);await addMonitor();});$('dialog-body').append(f);}
 function addNews(){openDialog('录入公开风险信息');const f=el('form'),grid=el('div',undefined,'form-grid');field(grid,'标题','title');field(grid,'类别','category','text','综合');field(grid,'来源名称','source');field(grid,'原始链接（HTTPS / HTTP）','source_url','url');field(grid,'发布时间（含时区）','published_at','text',new Date().toISOString());field(grid,'内容','content','textarea');f.append(grid);submit(f,'保存公开信息',async data=>{await api('/news','POST',Object.fromEntries(data));$('dialog').close();await refresh();});$('dialog-body').append(f);}
-$('public-targets').onclick=()=>action(publicTargets,$('public-targets'));
 $('close-dialog').onclick=()=>$('dialog').close();$('add').onclick=()=>action(addMonitor);$('add-news').onclick=addNews;
 $('manage').onclick=()=>action(manageTargets);
 $('refresh-vessels').onclick=()=>refreshGroup('vessel',$('refresh-vessels'));
@@ -221,5 +221,5 @@ $('timeline-latest').onclick=()=>{timelineOffset=0;timelineSnapshot=null;action(
 for(const id of ['ai-enabled','ai-auto'])$(id).onchange=()=>action(async()=>{try{renderAI(await api('/ai/settings','PATCH',{enabled:$('ai-enabled').checked,auto_refresh:$('ai-auto').checked}));}catch(e){renderAI(await api('/ai/status'));throw e;}});
 $('ai-refresh').onclick=()=>action(async()=>{renderAI(await api('/ai/refresh','POST'));},$('ai-refresh'));
 $('header-date').textContent=new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Tokyo',dateStyle:'long'}).format(new Date());
-action(async()=>{await RiskPlaces.load();await refresh();const health=await api('/health');$('schedule').textContent=health.scheduler_seconds?`自动采集：每 ${health.scheduler_seconds>=3600?health.scheduler_seconds/3600+' 小时':health.scheduler_seconds>=60?health.scheduler_seconds/60+' 分钟':health.scheduler_seconds+' 秒'} · 页面每 15 秒只读本地缓存`:'自动采集关闭 · 使用船舶或航空刷新按钮 · 时间为 JST';});
+action(async()=>{await RiskPlaces.load();await refresh();const health=await api('/health');$('schedule').textContent=health.scheduler_seconds?`自动采集：每 ${health.scheduler_seconds>=3600?health.scheduler_seconds/3600+' 小时':health.scheduler_seconds>=60?health.scheduler_seconds/60+' 分钟':health.scheduler_seconds+' 秒'} · JST`:'自动采集关闭 · JST';});
 setInterval(()=>{if(!document.hidden&&!$('dialog').open)action(refresh);},15000);

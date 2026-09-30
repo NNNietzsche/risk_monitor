@@ -5,8 +5,6 @@ import pytest
 from fastapi.testclient import TestClient
 from backend.app import create_app
 from backend.models import MonitorCreate
-from backend.business_profile import ais_vessel_type
-from backend.live_providers import DigitrafficProvider,PublicHTTP
 
 
 def ship(c):
@@ -87,30 +85,12 @@ def test_default_half_hour_scheduler_and_local_reads_do_not_fetch(tmp_path,monke
 
 def test_aircraft_role_is_not_inferred_from_model_and_manual_edit_works(tmp_path):
     app=create_app(tmp_path/'aircraft-profile.db',interval=0)
+    from backend.providers import MockProvider
+    provider=MockProvider();provider.name='test-position'
+    app.state.store.registry.register(provider,name='Test position source',kinds=['aircraft'],capabilities={'aircraft':['position']})
     with TestClient(app) as c:
-        m=c.post('/api/v1/monitors',json={'kind':'aircraft','name':'A','provider':'adsblol-v1','aircraft_registration':'JA123A','icao24':'abcdef'}).json()
+        m=c.post('/api/v1/monitors',json={'kind':'aircraft','name':'A','provider':'test-position','aircraft_registration':'JA123A','icao24':'abcdef'}).json()
         assert m['business']['category_label']=='未分类'
         updated=c.patch('/api/v1/monitors/'+m['id']+'/profile',json={'aircraft_role':'cargo','aircraft_model':'B777F'}).json()
         assert updated['business']['category_label']=='货机' and updated['business']['aircraft_model']=='B777F'
         assert c.patch('/api/v1/monitors/'+m['id']+'/profile',json={'vessel_type':'container'}).status_code==422
-
-
-def test_ais_metadata_enrichment_is_optional_identity_checked_and_cached(tmp_path):
-    app=create_app(tmp_path/'ais-type.db',interval=0);store=app.state.store
-    calls=[];now=datetime.now(timezone.utc)
-    def response(request):
-        calls.append(str(request.url))
-        if '/vessels/' in request.url.path:return httpx.Response(200,json={'mmsi':230000001,'shipType':70})
-        return httpx.Response(200,json={'features':[{'geometry':{'type':'Point','coordinates':[47,12]},'properties':{'mmsi':230000001,'timestampExternal':now.timestamp()*1000}}]})
-    provider=DigitrafficProvider(PublicHTTP(httpx.MockTransport(response)))
-    m=store.create_monitor(MonitorCreate(kind='vessel',name='Cargo',provider='digitraffic-v1',mmsi='230000001',region_id='demo-zone'))
-    payload=provider.fetch(m,'sequence',now)
-    assert provider.normalize(payload,m).vessel_type=='cargo'
-    assert len(calls)==2
-    provider.fetch(m,'sequence',now);assert len(calls)==2
-    payload['vessel_metadata']['body']['mmsi']=230000002
-    assert provider.normalize(payload,m).vessel_type is None
-    payload.pop('vessel_metadata')
-    assert provider.normalize(payload,m).latitude==12
-    assert ais_vessel_type(70)=='cargo' and ais_vessel_type(0) is None
-    assert ais_vessel_type(80)=='liquid_cargo'

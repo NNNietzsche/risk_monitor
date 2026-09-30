@@ -6,7 +6,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from .live_providers import FetchError
+from .provider_errors import FetchError
 from .models import Observation
 from .fr24_category import category_request, CATEGORIES
 

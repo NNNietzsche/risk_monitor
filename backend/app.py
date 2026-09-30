@@ -60,7 +60,7 @@ def create_app(db_path=None, interval=None):
                 await task
 
     app = FastAPI(title="资产风险监控 API", version="0.1.0", lifespan=lifespan,
-                  description="公开 AIS / ADS-B 与 Mock Provider；确定性规则与可追溯事件。")
+                  description="Flightradar24 / MarineTraffic 数据接入；确定性规则与可追溯事件。")
     app.state.store = store
     app.state.portal = portal
     app.add_middleware(CORSMiddleware, allow_origins=["http://127.0.0.1:3000", "http://localhost:3000"],
@@ -94,10 +94,6 @@ def create_app(db_path=None, interval=None):
     def health():
         modes = {not m["source"]["is_mock"] for m in store.monitors() if m["enabled"]}
         return {"status": "ok", "mode": "mixed" if len(modes)>1 else "live" if modes == {True} else "mock", "scheduler_seconds": seconds, "engine_version": ENGINE_VERSION}
-
-    @app.get("/api/v1/public/targets")
-    def public_targets():
-        return store.registry.discover()
 
     @app.get("/api/v1/public/sources", response_model=dict[str, SourceOut])
     def public_sources():
@@ -211,11 +207,11 @@ def create_app(db_path=None, interval=None):
 
     @app.get("/", include_in_schema=False)
     def home():
-        return RedirectResponse("/asset-risk.html")
+        return FileResponse(ROOT / "demo.html")
 
     @app.get("/asset-risk.html", include_in_schema=False)
     @app.get("/demo.html", include_in_schema=False)
     def page():
-        return FileResponse(ROOT / "demo.html")
+        return RedirectResponse("/", status_code=308)
 
     return app

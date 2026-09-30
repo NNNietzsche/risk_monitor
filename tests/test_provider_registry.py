@@ -39,7 +39,7 @@ def test_unknown_provider_missing_identity_and_wrong_capabilities_are_rejected(t
     with TestClient(app) as c:
         vessel={'kind':'vessel','name':'X','imo':'9074729','region_id':'demo-zone'}
         assert c.post('/api/v1/monitors',json=vessel|{'provider':'unregistered'}).status_code==422
-        assert c.post('/api/v1/monitors',json=vessel|{'provider':'digitraffic-v1'}).status_code==422
+        assert c.post('/api/v1/monitors',json=vessel|{'provider':'marinetraffic-sdk-v1'}).status_code==422
         flight={'kind':'flight','name':'X','provider':'independent-vendor','carrier':'RM','flight_number':'123','service_date':'2026-09-11','departure':'HND','arrival':'PVG','scheduled_departure':'2026-09-11T10:00:00+09:00','scheduled_arrival':'2026-09-11T13:00:00+09:00'}
         assert c.post('/api/v1/monitors',json=flight).status_code==422
         assert not c.get('/api/v1/monitors').json()

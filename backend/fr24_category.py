@@ -7,7 +7,7 @@ import base64
 import struct
 import uuid
 from datetime import datetime, timezone
-from .live_providers import FetchError
+from .provider_errors import FetchError
 
 URL = 'https://data-feed.flightradar24.com/fr24.feed.api.v1.Feed/FlightDetails'
 MAPPING_VERSION = 'fr24-aircraft-service-20260925'

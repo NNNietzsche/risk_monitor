@@ -58,3 +58,8 @@ button.timeline-link:hover { background: #eff6ff; color: #2563eb; }
 .danger-button { color: #b34135; border-color: #ecc4be; }
 .panel-heading .actions { gap: 8px; }
 .panel-heading button { font-size: 12px; padding: 6px 10px; }
+
+/* Standalone monitor header and concise data-source attribution. */
+.source-attribution{margin:0 0 18px;font-size:12px;line-height:1.8;color:var(--muted)}
+.source-attribution a{color:#4870a6;text-decoration:none}
+.source-attribution a:hover{text-decoration:underline}

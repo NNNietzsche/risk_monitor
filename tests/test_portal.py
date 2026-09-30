@@ -19,10 +19,16 @@ def app(tmp_path, monkeypatch):
 
 def test_page_navigation_and_closed_loop(app):
     with TestClient(app) as client:
-        page = client.get('/asset-risk.html')
+        page = client.get('/')
+        assert not page.history
+        for old in ['/asset-risk.html','/demo.html']:
+            redirect=client.get(old,follow_redirects=False)
+            assert redirect.status_code==308 and redirect.headers['location']=='/'
         assert page.status_code == 200
         for path in ['index.html','daily-news.html','asset-risk.html','entity-assessment.html','deep-reports.html','intl-ratings.html']:
-            assert f'href="{path}"' in page.text
+            assert f'href="{path}"' not in page.text
+        assert '<nav' not in page.text
+        assert 'public-targets' not in page.text
         assert client.get('/.env').status_code == 404
         assert client.get('/data/risk.db').status_code == 404
         assert client.get('/static/app.js').status_code == 200
