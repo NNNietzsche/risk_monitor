@@ -47,19 +47,15 @@ class ProviderRegistry:
 
 
 def create_registry():
-    from .providers import MockProvider
     registry=ProviderRegistry()
-    registry.register(MockProvider(),name='模拟数据',kinds=['vessel','flight'],is_mock=True,
-        capabilities={'vessel':['position'],'flight':['position','flight_times','flight_status']},
-        coverage='用于验证规则；不代表真实资产状态')
     from .sdk_providers import SDKGateway, MarineTrafficProvider, FlightRadarProvider
     gateway=SDKGateway()
-    registry.register(MarineTrafficProvider(gateway),name='MarineTraffic API',kinds=['vessel'],
+    registry.register(MarineTrafficProvider(gateway),name='MarineTraffic',kinds=['vessel'],
         capabilities={'vessel':['position']},required_fields={'vessel':['source_ref']},
         reference_label='船舶来源编号 shipId（非 IMO/MMSI）',
         url='https://www.marinetraffic.com/',coverage='船舶位置、航次与船型',
         max_age_seconds=3600,profile_mode='provider')
-    registry.register(FlightRadarProvider(gateway),name='Flightradar24（FlightRadarAPI）',kinds=['aircraft','flight'],
+    registry.register(FlightRadarProvider(gateway),name='Flightradar24',kinds=['aircraft','flight'],
         capabilities={'aircraft':['position','current_flight'],'flight':['position','flight_times','flight_status']},
         required_fields={'aircraft':['aircraft_registration'],'flight':['source_ref']},
         reference_label='当天航班来源编号（FR24 flight ID）',

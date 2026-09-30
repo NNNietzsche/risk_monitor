@@ -1,5 +1,4 @@
 from datetime import date, datetime, timezone
-from enum import Enum
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -24,12 +23,12 @@ class MonitorCreate(StrictModel):
     kind: Literal["vessel", "flight", "aircraft"]
     name: str = Field(min_length=1, max_length=100)
     profile: BusinessProfile = Field(default_factory=BusinessProfile)
-    provider: str = Field(default="mock-v1", min_length=1, max_length=80, pattern=r"^[a-z0-9][a-z0-9_-]*$")
+    provider: str = Field(min_length=1, max_length=80, pattern=r"^[a-z0-9][a-z0-9_-]*$")
+    remark: str = Field(default='', max_length=100)
     icao24: str | None = Field(default=None, pattern=r"^[0-9a-f]{6}$")
     source_ref: str | None = Field(default=None, min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
     imo: str | None = Field(default=None, pattern=r"^\d{7}$")
     mmsi: str | None = Field(default=None, pattern=r"^\d{9}$")
-    region_id: str | None = None
     carrier: str | None = Field(default=None, pattern=r"^[A-Z0-9]{2,3}$")
     flight_number: str | None = Field(default=None, pattern=r"^[0-9]{1,4}[A-Z]?$")
     service_date: date | None = None
@@ -51,22 +50,20 @@ class MonitorCreate(StrictModel):
         if self.kind == "aircraft":
             if not self.aircraft_registration:
                 raise ValueError("飞机实体需要注册号")
-            if any(getattr(self, key) is not None for key in (*flight_fields, "imo", "mmsi", "region_id")):
+            if any(getattr(self, key) is not None for key in (*flight_fields, "imo", "mmsi")):
                 raise ValueError("飞机实体不能包含具体航班或船舶字段")
             return self
         if self.icao24:
             raise ValueError("ICAO24 仅用于飞机实体")
         if self.kind == "vessel":
-            if not self.imo and not self.mmsi:
-                raise ValueError("船舶至少需要 IMO 或 MMSI")
+            if not self.imo and not self.mmsi and not self.source_ref:
+                raise ValueError("船舶需要有效标识码")
             if self.imo and sum(int(n) * w for n, w in zip(self.imo[:6], range(7, 1, -1))) % 10 != int(self.imo[-1]):
                 raise ValueError("IMO 校验位不正确")
-            if not self.region_id:
-                raise ValueError("请选择风险区域")
             if any(getattr(self, key) is not None for key in (*flight_fields, "aircraft_registration")):
                 raise ValueError("船舶不能包含航班字段")
         else:
-            if self.imo or self.mmsi or self.region_id:
+            if self.imo or self.mmsi:
                 raise ValueError("航班不能包含船舶字段")
             if any(getattr(self, key) is None for key in flight_fields):
                 raise ValueError("航班需要运营方、班号、服务日期、机场和计划时间")
@@ -104,26 +101,42 @@ class RegionCreate(StrictModel):
         return self
 
 
-class Scenario(str, Enum):
-    sequence = "sequence"
-    outside = "outside"
-    inside = "inside"
-    boundary = "boundary"
-    on_time = "on_time"
-    delayed = "delayed"
-    recovered = "recovered"
-    cancelled = "cancelled"
-    diverted = "diverted"
-    actual = "actual"
-    missing = "missing"
-    stale = "stale"
-    out_of_order = "out_of_order"
-    duplicate = "duplicate"
-    failure = "failure"
+class Enrollment(StrictModel):
+    kind: Literal['vessel', 'aircraft']
+    identifier_type: Literal['ship_id', 'imo', 'mmsi', 'registration']
+    identifier: str = Field(min_length=1, max_length=20)
+    remark: str = Field(default='', max_length=100)
+
+    @model_validator(mode='after')
+    def identity(self):
+        import re
+        if self.kind == 'aircraft':
+            self.identifier = self.identifier.upper()
+            if self.identifier_type != 'registration' or not re.fullmatch(r'[A-Z0-9-]{3,12}',self.identifier):
+                raise ValueError('请填写有效飞机注册号，例如 JA602F')
+        elif self.identifier_type == 'registration':
+            raise ValueError('船舶请选择 shipId、IMO 或 MMSI')
+        elif self.identifier_type == 'ship_id':
+            if not re.fullmatch(r'[0-9]{1,18}',self.identifier) or int(self.identifier) <= 0:
+                raise ValueError('shipId 应为正整数，请勿填写网址')
+            self.identifier = str(int(self.identifier))
+        elif self.identifier_type == 'imo':
+            if not re.fullmatch(r'[0-9]{7}',self.identifier):
+                raise ValueError('IMO 应为 7 位数字')
+            if sum(int(n)*w for n,w in zip(self.identifier[:6],range(7,1,-1)))%10 != int(self.identifier[-1]):
+                raise ValueError('IMO 校验位不正确，请核对标识码')
+        elif not re.fullmatch(r'[0-9]{9}',self.identifier) or int(self.identifier) == 0:
+            raise ValueError('MMSI 应为 9 位数字')
+        return self
+
+
+class RemarkPatch(StrictModel):
+    remark: str = Field(default='', max_length=100)
 
 
 class PollRequest(StrictModel):
-    scenario: Scenario = Scenario.sequence
+    """No caller-supplied source scenarios or overrides are accepted."""
+    pass
 
 
 class Observation(StrictModel):
@@ -135,6 +148,7 @@ class Observation(StrictModel):
     callsign: str | None = None
     aircraft_type: str | None = None
     vessel_type: str | None = None
+    vessel_name: str | None = Field(default=None, max_length=100)
     aircraft_role: str | None = None
     aircraft_category: str | None = Field(default=None, max_length=120)
     flight_number: str | None = Field(default=None, max_length=30)
@@ -157,6 +171,8 @@ class Observation(StrictModel):
     flight_context: Literal['live', 'recent', 'scheduled'] | None = None
     departure: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
     arrival: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
+    departure_name: str | None = Field(default=None, max_length=160)
+    arrival_name: str | None = Field(default=None, max_length=160)
     position_observed_at: datetime | None = None
     estimated_departure: datetime | None = None
     actual_departure: datetime | None = None

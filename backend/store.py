@@ -6,10 +6,11 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from .models import MonitorCreate, RegionCreate
-from .providers import VESSEL_SCENARIOS, FLIGHT_SCENARIOS
 from .rules import ENGINE_VERSION, evaluate
 from .provider_registry import create_registry
 from .migrations import migrate_aircraft, migrate_management
+from .core_migration import migrate_core
+from .regions import revision
 from .business_profile import describe_profile
 from .sdk_providers import NoLivePosition
 
@@ -66,13 +67,10 @@ class Store:
         with self.connection() as db:
             db.executescript(Path(__file__).with_name("schema.sql").read_text(encoding="utf-8"))
             db.execute("INSERT OR IGNORE INTO schema_versions VALUES (1,?)", (stamp(),))
-            db.execute("INSERT OR IGNORE INTO regions(id,name,version,geometry,created_at) VALUES (?,?,?,?,?)",
-                       ("demo-zone", "演示区域 A（非真实风险评级）", 1,
-                        encoded({"type": "Polygon", "coordinates": [[[40,10],[50,10],[50,20],[40,20],[40,10]]],
-                                 "bbox": [40,10,50,20]}), stamp()))
             db.execute("PRAGMA optimize")
         migrate_aircraft(self.path)
         migrate_management(self.path)
+        migrate_core(self.path)
 
     def connection(self):
         db = sqlite3.connect(self.path, timeout=15)
@@ -90,7 +88,7 @@ class Store:
         m["rule"] = unpack(db.execute("SELECT * FROM rule_versions WHERE id=?", (m["rule_id"],)).fetchone(), ("config",))
         m["asset"] = unpack(db.execute("SELECT * FROM assets WHERE id=?", (m["asset_id"],)).fetchone())
         m["flight"] = unpack(db.execute("SELECT * FROM flight_instances WHERE id=?", (m["flight_id"],)).fetchone())
-        m["region"] = unpack(db.execute("SELECT * FROM regions WHERE id=?", (m["rule"]["config"].get("region_id"),)).fetchone(), ("geometry",))
+        m['regions'] = [unpack(r,('geometry',)) for r in db.execute('SELECT * FROM regions WHERE deleted_at IS NULL ORDER BY id')] if m['kind']=='vessel' else []
         m["latest"] = unpack(db.execute("SELECT * FROM observations WHERE monitor_id=? AND quality='evaluated' ORDER BY observed_at DESC LIMIT 1", (monitor_id,)).fetchone(), ("data",))
         m["current"] = unpack(db.execute("SELECT * FROM monitor_context WHERE monitor_id=?", (monitor_id,)).fetchone(), ("data",))
         if m['current']:
@@ -102,6 +100,8 @@ class Store:
             age = (datetime.now(timezone.utc) - datetime.fromisoformat(m["latest"]["observed_at"])).total_seconds()
             if age > m["rule"]["config"]["max_age_seconds"]:
                 m["health"] = "stale"
+        if m['kind']=='vessel' and m['health']=='ok' and m['state'].get('region_revision') != revision(m['regions']):
+            m['health'] = 'pending'
         m["business"] = describe_profile(m)
         return m
 
@@ -122,7 +122,7 @@ class Store:
         with self.connection() as db:
             result=[unpack(r, ("geometry",)) for r in db.execute("SELECT * FROM regions" + ("" if include_deleted else " WHERE deleted_at IS NULL") + " ORDER BY created_at")]
             for region in result:
-                region['monitor_names']=[row['name'] for row in db.execute("SELECT m.name FROM monitors m JOIN rule_versions r ON r.id=m.rule_id WHERE m.deleted_at IS NULL AND json_extract(r.config,'$.region_id')=?",(region['id'],))]
+                region['monitor_names']=[row['name'] for row in db.execute("SELECT name FROM monitors WHERE kind='vessel' AND deleted_at IS NULL")] if not region['deleted_at'] else []
             return result
 
     def create_region(self, request: RegionCreate):
@@ -146,12 +146,10 @@ class Store:
             with self.lock, self.connection() as db:
                 db.execute("BEGIN IMMEDIATE")
                 if request.kind == "vessel":
-                    if not db.execute("SELECT id FROM regions WHERE id=? AND deleted_at IS NULL", (request.region_id,)).fetchone():
-                        raise NotFound("风险区域不存在")
                     asset_id = uid()
-                    db.execute("INSERT INTO assets(id,kind,name,imo,mmsi) VALUES (?,?,?,?,?)",
-                               (asset_id, "vessel", request.name, request.imo, request.mmsi))
-                    config["region_id"] = request.region_id
+                    db.execute("INSERT INTO assets(id,kind,name,imo,mmsi,source_ref) VALUES (?,?,?,?,?,?)",
+                               (asset_id, "vessel", request.name, request.imo, request.mmsi, request.source_ref))
+                    config['region_scope'] = 'all_active'
                 elif request.kind == "aircraft":
                     row = db.execute("SELECT id FROM assets WHERE registration=?", (request.aircraft_registration,)).fetchone()
                     asset_id = row["id"] if row else uid()
@@ -175,8 +173,8 @@ class Store:
                                 request.departure, request.arrival, request.scheduled_departure.isoformat(), request.scheduled_arrival.isoformat()))
                     config.update(threshold_minutes=request.threshold_minutes, delay_basis=request.delay_basis)
                 db.execute("INSERT INTO rule_versions VALUES (?,?,?,?,?,?)", (rule_id, request.kind, 1, ENGINE_VERSION, encoded(config), stamp()))
-                db.execute("INSERT INTO monitors(id,name,kind,asset_id,flight_id,rule_id,provider,created_at,profile) VALUES (?,?,?,?,?,?,?,?,?)",
-                           (m_id, request.name, request.kind, asset_id, flight_id, rule_id, request.provider, stamp(), encoded(request.profile.model_dump())))
+                db.execute("INSERT INTO monitors(id,name,kind,asset_id,flight_id,rule_id,provider,created_at,profile,remark) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                           (m_id, request.name, request.kind, asset_id, flight_id, rule_id, request.provider, stamp(), encoded(request.profile.model_dump()),request.remark))
                 self._audit(db, m_id, "created", {}, request.model_dump(mode="json"))
         except sqlite3.IntegrityError as exc:
             raise Conflict("相同 IMO/MMSI 的船舶、飞机实体或航班实例已经存在；已删除目标请到管理页面恢复") from exc
@@ -213,7 +211,7 @@ class Store:
             self._audit(db, monitor_id, "rule_changed", old, {"id": new_id, "config": config})
         return self.detail(monitor_id)
 
-    def poll(self, monitor_id, scenario="sequence"):
+    def poll(self, monitor_id):
         with self.lock:
             with self.connection() as db:
                 m = self._target(db, monitor_id)
@@ -221,19 +219,13 @@ class Store:
                 raise Conflict("目标已删除")
             if not m["enabled"]:
                 raise Conflict("该监控已暂停")
-            if not m["source"]["is_mock"]:
-                if scenario != "sequence":
-                    raise ValueError("真实数据源不支持模拟场景")
-            allowed = {"sequence"} if not m["source"]["is_mock"] else VESSEL_SCENARIOS if m["kind"] == "vessel" else FLIGHT_SCENARIOS
-            if scenario not in allowed:
-                raise ValueError("此场景不适用于该监控类型")
             now, raw_id = datetime.now(timezone.utc), uid()
             provider = self.providers[m["provider"]]
             error = None
             try:
-                payload = provider.fetch(m, scenario, now)
+                payload = provider.fetch(m, now)
             except (TimeoutError, ConnectionError, ValueError) as exc:
-                payload, error = getattr(exc, "payload", {"scenario": scenario, "error": str(exc), "mock": m["source"]["is_mock"]}), str(exc)
+                payload, error = getattr(exc, "payload", {"error": str(exc)}), str(exc)
             body = encoded(payload)
             # Commit original data before any normalization or risk evaluation.
             with self.connection() as db:
@@ -265,6 +257,10 @@ class Store:
                     if age >= -60:
                         db.execute('INSERT OR REPLACE INTO monitor_context VALUES (?,?,?,?)',
                                    (monitor_id, raw_id, now.isoformat(), encoded(data)))
+                        if m['kind']=='vessel' and data.get('vessel_name') and data['vessel_name']!=m['name']:
+                            db.execute('UPDATE monitors SET name=? WHERE id=?',(data['vessel_name'],monitor_id))
+                            db.execute('UPDATE assets SET name=? WHERE id=?',(data['vessel_name'],m['asset_id']))
+                            self._audit(db,monitor_id,'source_name_updated',{'name':m['name']},{'name':data['vessel_name'],'raw_id':raw_id})
                     # History may confirm a flight's status without a current position.
                     # Preserve the previous evaluated position and its risk evidence.
                     if m['kind']=='aircraft' and observation.flight_context and observation.latitude is None and age >= -60:
@@ -276,18 +272,32 @@ class Store:
                         db.execute("UPDATE raw_records SET outcome=? WHERE id=?", (outcome, raw_id))
                         db.execute("UPDATE monitors SET health=?,last_error=? WHERE id=?", (outcome, "数据时间不在有效窗口内", monitor_id))
                         return {"raw_id": raw_id, "outcome": outcome, "events": []}
-                    latest_any = db.execute("SELECT observed_at,quality FROM observations WHERE monitor_id=? ORDER BY observed_at DESC LIMIT 1", (monitor_id,)).fetchone()
+                    latest_any = db.execute("SELECT * FROM observations WHERE monitor_id=? ORDER BY observed_at DESC LIMIT 1", (monitor_id,)).fetchone()
+                    reused = None
                     if latest_any and observed_at <= latest_any["observed_at"]:
                         outcome = "duplicate" if observed_at == latest_any["observed_at"] else "out_of_order"
                         db.execute("UPDATE raw_records SET outcome=? WHERE id=?", (outcome, raw_id))
-                        if outcome == "duplicate" and latest_any["quality"] == "evaluated" and m["state"]:
-                            db.execute("UPDATE monitors SET health='ok',last_error=NULL WHERE id=?", (monitor_id,))
-                        return {"raw_id": raw_id, "outcome": outcome, "events": []}
+                        last_eval=db.execute('SELECT rule_id FROM evaluations WHERE observation_id=? ORDER BY evaluated_at DESC LIMIT 1',(latest_any['id'],)).fetchone()
+                        policy_changed=(last_eval and last_eval['rule_id'] != m['rule_id']) or (m['kind']=='vessel' and m['state'].get('region_revision') != revision(m['regions']))
+                        if outcome=='duplicate' and latest_any['quality']=='evaluated' and policy_changed:
+                            # Reassess the original fresh observation against the new policy.
+                            # Keep its original raw record/hash; never fabricate a new position.
+                            reused=latest_any
+                            data=json.loads(reused['data'])
+                        else:
+                            if outcome == "duplicate" and latest_any["quality"] == "evaluated" and m["state"]:
+                                db.execute("UPDATE monitors SET health='ok',last_error=NULL WHERE id=?", (monitor_id,))
+                            return {"raw_id": raw_id, "outcome": outcome, "events": []}
                     state, quality, evidence, specs = evaluate(m, data)
-                    obs_id, evaluation_id = uid(), uid()
-                    evidence.update(observation_id=obs_id, raw_id=raw_id, raw_sha256=hashlib.sha256(body.encode()).hexdigest(),
+                    obs_id, evaluation_id = reused['id'] if reused else uid(), uid()
+                    original=db.execute('SELECT id,sha256 FROM raw_records WHERE id=?',(reused['raw_id'] if reused else raw_id,)).fetchone()
+                    evidence.update(observation_id=obs_id, raw_id=original['id'], raw_sha256=original['sha256'],
                                     rule_id=m["rule_id"], rule_version=m["rule"]["version"])
-                    db.execute("INSERT INTO observations VALUES (?,?,?,?,?,?)", (obs_id, monitor_id, raw_id, observed_at, encoded(data), quality))
+                    if reused:
+                        evidence['policy_reassessment']=True
+                        evidence['trigger_raw_id']=raw_id
+                    else:
+                        db.execute("INSERT INTO observations VALUES (?,?,?,?,?,?)", (obs_id, monitor_id, raw_id, observed_at, encoded(data), quality))
                     db.execute("INSERT INTO evaluations VALUES (?,?,?,?,?,?,?)",
                                (evaluation_id, monitor_id, obs_id, m["rule_id"], stamp(), quality, encoded(evidence)))
                     events = []

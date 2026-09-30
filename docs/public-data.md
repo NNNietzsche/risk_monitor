@@ -1,10 +1,9 @@
-# 数据来源
+# 数据源与显示
 
-2026-09-30 起只保留两个真实数据适配器：
+船舶：MarineTraffic。飞机：Flightradar24。列表只展示业务字段与状态，详情提供来源与最近采集时间，展开审计可查看原始记录。
 
-- Flightradar24（FlightRadarAPI）：按注册号持续获取飞机位置、当前航班及可用的起降时刻；飞机类型及分类来自接口。
-- MarineTraffic API：按核实后的 shipId 获取船舶位置；IMO/MMSI 仍为业务身份。
+岸基位置过旧时，只有最新成功核查包含 hasNewerSatellitePosition=true，才说明有更新的卫星船位；不显示未知卫星坐标，不用旧位置生成新风险告警。
 
-两者均为实验 SDK 接入，具体能力、失败冷却和证据范围见 [sdk-integration.md](sdk-integration.md) 与 [aircraft-tracking.md](aircraft-tracking.md)。页面简短介绍不改变数据授权或可用性边界。
+已降落或未起飞需要明确航班记录与可核实的飞机身份；无证据则保持暂无实时位置。机场使用中文常用名或来源原名并附 IATA 代号；没有名称则明确说明。
 
-Digitraffic / ADSB.lol 接入、PUBLIC_DATA_CONTACT 配置、候选发现 API 和“接入公开数据”按钮已移除。已有历史记录不删除。新目标使用“添加监控对象”；模拟源仅用于显式演示和测试。
+公开新闻及 AI 分析已从本系统移除，系统只围绕指定资产的采集、状态、区域风险与航班异常。

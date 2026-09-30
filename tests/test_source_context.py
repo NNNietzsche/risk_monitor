@@ -14,7 +14,7 @@ def fixture(name):return json.loads((Path(__file__).parent/'fixtures'/name).read
 
 
 def ship(store):
-    return store.create_monitor(MonitorCreate(kind='vessel',name='COSCO SHIPPING UNIVERSE',imo='9795610',mmsi='477157400',source_ref='5554510',provider='marinetraffic-sdk-v1',region_id='demo-zone'))
+    return store.create_monitor(MonitorCreate(kind='vessel',name='COSCO SHIPPING UNIVERSE',imo='9795610',mmsi='477157400',source_ref='5554510',provider='marinetraffic-sdk-v1'))
 
 
 def test_satellite_context_and_voyage_survive_stale_position_without_new_risk(tmp_path):

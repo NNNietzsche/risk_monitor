@@ -16,7 +16,7 @@ window.RiskMaps = (() => {
     if (text !== undefined) n.textContent = text;
     return n;
   };
-  function draw(id, monitors, openTarget) {
+  function draw(id,monitors,openTarget,regions=[]) {
     let state = states.get(id);
     if (!state) { state = {view:[0,0,720,360]}; states.set(id,state); }
     const root = document.getElementById(id);
@@ -28,8 +28,7 @@ window.RiskMaps = (() => {
     for(let lat=-60;lat<=60;lat+=30){const [,y]=project(0,lat);svg.append(create('line',{x1:0,x2:720,y1:y,y2:y,stroke:'#b7c9d5','stroke-width':.4,'stroke-dasharray':'2 3'}));}
     const geographicLabels=[[-108,46,'北美洲'],[-60,-17,'南美洲'],[18,52,'欧洲'],[18,5,'非洲'],[88,49,'亚洲'],[136,-26,'大洋洲'],[-140,0,'太平洋'],[170,0,'太平洋'],[-33,8,'大西洋'],[80,-25,'印度洋']];
     geographicLabels.forEach(([lon,lat,name])=>{const [x,y]=project(lon,lat);svg.append(create('text',{x,y,'text-anchor':'middle',fill:'#738b91','font-size':9,'pointer-events':'none'},name));});
-    const regions=new Map(monitors.filter(m=>m.region).map(m=>[m.region.id,m.region]));
-    regions.forEach(r=>{const [w,s,e,n]=r.geometry.bbox, [x,y]=project(w,n);const rect=create('rect',{x,y,width:(e-w)*2,height:(n-s)*2,fill:'#ef9b5240',stroke:'#c47b3a','stroke-width':1,'vector-effect':'non-scaling-stroke'});rect.append(create('title',{},r.name));svg.append(rect);});
+    regions.forEach(r=>{const d=r.geometry.coordinates.map(ring=>ring.map((p,i)=>(i?'L':'M')+project(p[0],p[1]).join(' ')).join(' ')+'Z').join(' ');const area=create('path',{d,fill:'#ef9b5240',stroke:'#c47b3a','stroke-width':1,'fill-rule':'evenodd','vector-effect':'non-scaling-stroke'});area.append(create('title',{},r.name));svg.append(area);});
     const points=[];
     monitors.forEach(m=>{
       const d=window.TargetPresenter?.position(m)||m.latest?.data;

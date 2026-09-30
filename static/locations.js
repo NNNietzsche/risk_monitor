@@ -1,6 +1,6 @@
 'use strict';
 (() => {
-  const airports = {HND:'东京羽田',NRT:'东京成田',DLC:'大连周水子',PVG:'上海浦东',SHA:'上海虹桥',MEL:'墨尔本'};
+  const airports = {HND:'东京羽田',NRT:'东京成田',DLC:'大连周水子',PVG:'上海浦东',SHA:'上海虹桥',MEL:'墨尔本',TPE:'台北桃园',KIX:'大阪关西',PEK:'北京首都',CAN:'广州白云',SIN:'新加坡樟宜',HKG:'香港国际',ICN:'首尔仁川'};
   function inRing(x,y,ring) {
     let inside=false;
     for(let i=0,j=ring.length-1;i<ring.length;j=i++){
@@ -24,7 +24,7 @@
   let lookup=null;
   const api={
     createLookup,
-    airport:code=>airports[code]||code||'未知机场',
+    airport:(code,name)=>code?`${airports[code]||name||'机场名称未提供'}（${code}）`:(name||'机场未提供'),
     seaName:data=>data?.longitude==null||data?.latitude==null?'暂无定位':lookup?lookup(data.longitude,data.latitude):'海域暂不可用',
     async load(){try{const response=await fetch('/static/places.json');if(!response.ok)throw new Error('Unavailable');lookup=createLookup(await response.json());}catch{lookup=null;}}
   };

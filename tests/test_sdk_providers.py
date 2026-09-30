@@ -21,8 +21,8 @@ def test_sdk_each_poll_requests_again_and_failure_does_not_block_other_targets()
 
 def test_marine_identity_position_and_age_are_not_invented(tmp_path):
     store=create_app(tmp_path/'mt.db',interval=0).state.store
-    m=store.create_monitor(MonitorCreate(kind='vessel',name='Ship',imo='9795610',source_ref='5554510',provider='marinetraffic-sdk-v1',region_id='demo-zone'))
-    now=int(datetime.now(timezone.utc).timestamp());body={'shipId':5554510,'timestamp':now,'lat':15,'lon':45,'areaName':'Test Sea'}
+    m=store.create_monitor(MonitorCreate(kind='vessel',name='Ship',imo='9795610',source_ref='5554510',provider='marinetraffic-sdk-v1'))
+    now=int(datetime.now(timezone.utc).timestamp());body={'shipId':5554510,'timestamp':now,'lat':12,'lon':47,'areaName':'Test Sea'}
     provider=MarineTrafficProvider(SDKGateway(),lambda ref:{'body':deepcopy(body),'mock':False})
     store.providers[provider.name]=provider
     result=store.poll(m['id']);assert result['outcome']=='evaluated'
@@ -30,7 +30,7 @@ def test_marine_identity_position_and_age_are_not_invented(tmp_path):
     assert event['rule']['config']['source_ref']=='5554510'
     for bad in [{'shipId':5554511},{'lat':None},{'timestamp':None},{'imo':1234567}]:
         with pytest.raises(ValueError):provider.normalize({'body':body|bad},m)
-    with pytest.raises(ValueError):store.create_monitor(MonitorCreate(kind='vessel',name='bad',mmsi='123456789',source_ref='0',provider=provider.name,region_id='demo-zone'))
+    with pytest.raises(ValueError):store.create_monitor(MonitorCreate(kind='vessel',name='bad',mmsi='123456789',source_ref='0',provider=provider.name))
 
 
 def flight_body(now):

@@ -1,6 +1,7 @@
-"""Pure deterministic rules; no AI, I/O or clock reads."""
+"""Pure deterministic rules; no I/O or clock reads."""
 from datetime import datetime
-ENGINE_VERSION = "1.1.0"
+from .regions import contains, revision
+ENGINE_VERSION = "1.2.0"
 
 
 def evaluate(target, observation):
@@ -14,17 +15,27 @@ def evaluate(target, observation):
         lat, lon = observation.get("latitude"), observation.get("longitude")
         if lat is None or lon is None:
             return None, "missing", evidence, events
-        west, south, east, north = target["region"]["geometry"]["bbox"]
-        inside = west <= lon <= east and south <= lat <= north
-        evidence.update(region=target["region"], latitude=lat, longitude=lon, inside=inside)
-        old = previous.get("inside")
-        if inside and old is None:
-            events.append(("vessel.first_seen_inside", "warning", "首次有效定位发现船舶位于风险区域"))
-        elif inside and old is False:
-            events.append(("vessel.entered_region", "high", "船舶由区域外变为区域内"))
-        elif not inside and old is True:
-            events.append(("vessel.exited_region", "info", "船舶已离开风险区域"))
-        return {"inside": inside}, "evaluated", evidence, events
+        regions = target['regions']
+        states, changes = {}, {'first_seen_inside':[], 'entered_region':[], 'exited_region':[]}
+        for region in regions:
+            inside = contains(region['geometry'],lon,lat)
+            old = previous.get('regions',{}).get(region['id'],{})
+            before = old.get('inside') if old.get('version') == region['version'] else None
+            states[region['id']] = {'inside':inside,'name':region['name'],'version':region['version']}
+            if inside and before is None:
+                changes['first_seen_inside'].append(region['name'])
+            elif inside and before is False:
+                changes['entered_region'].append(region['name'])
+            elif not inside and before is True:
+                changes['exited_region'].append(region['name'])
+        for key,severity,label in [('first_seen_inside','warning','首次有效定位位于'),('entered_region','high','船舶进入'),('exited_region','info','船舶离开')]:
+            if changes[key]:
+                events.append(('vessel.'+key,severity,label+'：'+'、'.join(changes[key])))
+        inside_names = [r['name'] for r in states.values() if r['inside']]
+        state = {'inside':bool(inside_names),'inside_regions':inside_names,'regions':states,'region_revision':revision(regions)}
+        evidence.update(regions=regions,region_results=states,region_revision=state['region_revision'],
+                        region_changes=changes,latitude=lat,longitude=lon,inside=state['inside'],inside_regions=inside_names)
+        return state, "evaluated", evidence, events
 
     if target["kind"] == "aircraft":
         evidence.update(operator="position_available", capabilities=["position"], flight_risk_assessed=False)

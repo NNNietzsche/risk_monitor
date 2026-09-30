@@ -22,8 +22,10 @@ test('marine holes do not count as the surrounding sea',()=>{
   assert.equal(lookup(1,1),'Test sea');
   assert.equal(lookup(3,3),'海域未知');
 });
-test('airport labels preserve unknown codes',()=>{
-  assert.equal(airport('HND'),'东京羽田');
-  assert.equal(airport('PVG'),'上海浦东');
-  assert.equal(airport('ZZZ'),'ZZZ');
+test('airport labels use names and retain codes with explicit missing data',()=>{
+  assert.equal(airport('HND'),'东京羽田（HND）');
+  assert.equal(airport('PVG'),'上海浦东（PVG）');
+  assert.equal(airport('TPE'),'台北桃园（TPE）');
+  assert.equal(airport('ABC','Source Airport'),'Source Airport（ABC）');
+  assert.equal(airport('ZZZ'),'机场名称未提供（ZZZ）');
 });

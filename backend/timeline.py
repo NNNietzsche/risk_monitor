@@ -19,7 +19,7 @@ def timeline_assessment(row, evaluation, events):
         return result | {"tone":"unknown", "label":"仅位置", "description":"飞机定位已更新；此监控仅评估位置，未评估航班延误、取消或备降。"}
     if data["kind"] == "vessel":
         inside = evidence.get("inside")
-        name = evidence.get("region", {}).get("name", "指定监控区域")
+        name = "、".join(evidence.get("inside_regions", [])) or evidence.get("region", {}).get("name", "全部有效风险区域")
         if inside is True:
             return result | {"tone":"warning", "label":"持续关注", "description":f"船舶仍位于{name}内；本次未发生新的进出变化。"}
         if inside is False:

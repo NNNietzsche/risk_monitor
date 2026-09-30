@@ -19,7 +19,7 @@
   }
   function metadata(m){
     const business=m.business||{};
-    if(m.kind==='vessel')return `${m.asset?.imo?'IMO '+m.asset.imo:'MMSI '+(m.asset?.mmsi||'—')} · ${business.category_label||'未分类'}`;
+    if(m.kind==='vessel')return `${m.asset?.imo?'IMO '+m.asset.imo:m.asset?.mmsi?'MMSI '+m.asset.mmsi:'shipId '+(m.asset?.source_ref||m.rule?.config?.source_ref||'—')} · ${business.category_label||'未分类'}`;
     const registration=m.asset?.registration||m.rule?.config?.aircraft_registration;
     return `${registration?registration+' · ':''}${business.aircraft_model||'机型未提供'} · ${business.category_label||'未分类'}`;
   }
@@ -37,7 +37,7 @@
       return from||to?`${from||'出发港未提供'} → ${to||'到达港未提供'}`:'航次未提供';
     }
     const from=d?.departure,to=d?.arrival;
-    const value=from||to?`${from?airport(from):'出发地未提供'} → ${to?airport(to):'目的地未提供'}`:'航线未提供';
+    const value=from||to?`${from?airport(from,d.departure_name):'出发地未提供'} → ${to?airport(to,d.arrival_name):'目的地未提供'}`:'航线未提供';
     return value+(m.kind==='aircraft'&&Object.keys(d).length&&(!m.enabled||(!m.current?.fresh&&m.health!=='ok'))?'（历史）':'');
   }
   const api={metadata,flightLabel,route,data,position,status};

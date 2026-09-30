@@ -45,6 +45,7 @@ class AssetOut(BaseModel):
     imo: str | None
     mmsi: str | None
     registration: str | None
+    source_ref: str | None = None
 
 
 class FlightOut(BaseModel):
@@ -82,6 +83,7 @@ class RawOut(BaseModel):
 class MonitorOut(BaseModel):
     id: str
     name: str
+    remark: str = ''
     kind: Literal["vessel", "flight", "aircraft"]
     asset_id: str | None
     flight_id: str | None
@@ -101,7 +103,7 @@ class MonitorOut(BaseModel):
     rule: RuleOut
     asset: AssetOut | None
     flight: FlightOut | None
-    region: RegionOut | None
+    regions: list[RegionOut] = Field(default_factory=list)
     latest: ObservationOut | None
     current: dict[str, Any] | None = None
 
@@ -161,6 +163,5 @@ class BatchPollResult(BaseModel):
 
 class HealthOut(BaseModel):
     status: Literal["ok"]
-    mode: Literal["mock", "live", "mixed"]
     scheduler_seconds: int
     engine_version: str

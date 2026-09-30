@@ -16,7 +16,7 @@ test('confirmed landing or schedule is independent of old map position',()=>{
   m.current.data.flight_status='landed';m.current.data.flight_context='recent';assert.equal(status(m)[0],'最近航班已降落');
   m.current.fresh=false;assert.equal(status(m),null);
 });
-test('demo contract: identity + ship type, model + aircraft role; no debug source suffix',()=>{
+test('business fields: identity + ship type, model + aircraft role; no debug source suffix',()=>{
   assert.equal(metadata({kind:'vessel',asset:{imo:'9381234'},business:{category_label:'集装箱船'},source:{is_mock:false}}),'IMO 9381234 · 集装箱船');
   assert.equal(metadata({kind:'vessel',asset:{mmsi:'230000001'},business:{category_label:'油轮'},source:{is_mock:true}}),'MMSI 230000001 · 油轮');
   assert.equal(metadata({kind:'flight',business:{aircraft_model:'B777',category_label:'客机'},provider:'mock-v1'}),'B777 · 客机');

@@ -96,7 +96,7 @@ class MarineTrafficProvider:
     def validate_target(self,target):
         if not target.source_ref or not target.source_ref.isdigit() or not 0<int(target.source_ref)<2**63:
             raise ValueError('船舶来源编号必须为正整数 shipId')
-    def fetch(self,target,scenario,now):
+    def fetch(self,target,now):
         ref=target['rule']['config']['source_ref']
         if not ref.isdigit() or not 0<int(ref)<2**63:raise ValueError('船舶来源编号必须为正整数 shipId')
         return self.gateway.run(self.name,ref,lambda:self.request(int(ref)))
@@ -119,6 +119,7 @@ class MarineTrafficProvider:
             joined[name]=item
         general=joined.get('general',{});voyage=joined.get('voyage',{});info=joined.get('info',{}).get('values',{})
         values={'vessel_type':general.get('subtype'), 'vessel_flag':general.get('country'),
+                'vessel_name':general.get('name') or general.get('aisName'),
                 'vessel_length':general.get('length'),'vessel_width':general.get('width'),
                 'callsign':general.get('callsign'),'reported_destination':voyage.get('reportedDestination')}
         # Port names and voyage dates are joined by port IDs, never by approximate geography.
@@ -143,7 +144,7 @@ class FlightRadarProvider:
     def validate_target(self,target):
         if target.kind=='flight' and not re.fullmatch('[0-9a-f]{6,16}',target.source_ref or ''):
             raise ValueError('航班来源编号需要当天 FR24 flight ID（小写十六进制）')
-    def fetch(self,target,scenario,now):
+    def fetch(self,target,now):
         kind='flight' if target['kind']=='flight' else 'registration'
         ref=target['rule']['config']['source_ref'] if kind=='flight' else target['asset']['registration']
         payload=self.gateway.run(self.name,(kind,ref),lambda:self.request(kind,ref))
@@ -233,6 +234,7 @@ class FlightRadarProvider:
         for side,source in [('departure','origin'),('arrival','destination')]:
             code=((airports.get(source) or {}).get('code') or {}).get('iata')
             values[side]=code if re.fullmatch('[A-Z]{3}',code or '') else None
+            values[side+'_name']=(airports.get(source) or {}).get('name') if values[side] else None
         category=(payload.get('aircraft_category_detail') or {}).get('body') or {}
         if fid and (category.get('aircraftInfo') or {}).get('reg')==target['asset']['registration'] and (category.get('flightInfo') or {}).get('flightId')==int(fid,16):
             service=(category.get('aircraftInfo') or {}).get('service')
@@ -274,6 +276,8 @@ class FlightRadarProvider:
                               for side,code in [('origin',f.origin_airport_iata),('destination',f.destination_airport_iata)])
             if route_matches and (identity.get('number') or {}).get('default')==f.number:
                 values.update(flight_values(detail))
+                values.update(departure_name=(detail_airports.get('origin') or {}).get('name'),
+                              arrival_name=(detail_airports.get('destination') or {}).get('name'))
         category=(payload.get('aircraft_category_detail') or {}).get('body') or {}
         info=category.get('aircraftInfo') or {};flight_info=category.get('flightInfo') or {}
         # This is the map website's field, not the legacy clickhandler aircraft object.

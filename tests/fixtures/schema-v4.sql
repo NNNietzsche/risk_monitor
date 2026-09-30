@@ -2,8 +2,8 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS schema_versions(version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS assets(
  id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK(kind IN ('vessel','aircraft')),
- name TEXT NOT NULL, imo TEXT UNIQUE, mmsi TEXT UNIQUE, registration TEXT UNIQUE, source_ref TEXT UNIQUE,
- CHECK((kind='vessel' AND (imo IS NOT NULL OR mmsi IS NOT NULL OR source_ref IS NOT NULL)) OR (kind='aircraft' AND registration IS NOT NULL))
+ name TEXT NOT NULL, imo TEXT UNIQUE, mmsi TEXT UNIQUE, registration TEXT UNIQUE,
+ CHECK((kind='vessel' AND (imo IS NOT NULL OR mmsi IS NOT NULL)) OR (kind='aircraft' AND registration IS NOT NULL))
 );
 CREATE TABLE IF NOT EXISTS flight_instances(
  id TEXT PRIMARY KEY, aircraft_id TEXT REFERENCES assets(id), carrier TEXT NOT NULL,
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS rule_versions(
 CREATE TABLE IF NOT EXISTS monitors(
  id TEXT PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL,
  asset_id TEXT UNIQUE REFERENCES assets(id), flight_id TEXT UNIQUE REFERENCES flight_instances(id),
- rule_id TEXT NOT NULL REFERENCES rule_versions(id), provider TEXT NOT NULL,
+ rule_id TEXT NOT NULL REFERENCES rule_versions(id), provider TEXT NOT NULL DEFAULT 'mock-v1',
  enabled INTEGER NOT NULL DEFAULT 1, cursor INTEGER NOT NULL DEFAULT 0,
  health TEXT NOT NULL DEFAULT 'unknown', last_poll_at TEXT, last_error TEXT,
  state TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL,
