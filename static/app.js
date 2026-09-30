@@ -7,7 +7,7 @@ const severityLabel = {high:'高风险',warning:'关注',info:'信息'};
 let dashboard = null, loading = false;
 let schedulerSeconds = null;
 const sourceLabel = m => m.source?.name || m.provider || '来源未知';
-let timelineOffset = 0, timelineSnapshot = null, timelineRequest = 0;
+const timelines = new Map();
 async function api(path, method='GET', body) {
   const r = await fetch('/api/v1' + path, {method, headers:body === undefined ? {} : {'Content-Type':'application/json'}, body:body === undefined ? undefined : JSON.stringify(body)});
   const value = await r.json();
@@ -33,13 +33,13 @@ function risk(m) {
   if (['cancelled','diverted'].includes(m.state.flight_status)) return [m.state.flight_status === 'cancelled' ? '已取消' : '已备降','high'];
   return m.state.exceeded ? [`延误 ${m.state.delay_minutes} 分钟`,'high'] : ['延误未超阈值','good'];
 }
-function metric(label, value, tone='') { const n=el('div',undefined,'metric '+tone); n.append(el('span',label,'metric-label'),el('strong',String(value),'metric-value')); return n; }
+function metric(label,value,tone){const n=el('div',undefined,'risk-pill '+tone);n.append(el('span',label,'risk-label'),el('strong',String(value),'risk-value'));return n;}
 function renderMonitors(items) {
   const ships=items.filter(m=>m.kind==='vessel'), flights=items.filter(m=>m.kind!=='vessel');
   const enabled=items.filter(m=>m.enabled);
-  $('summary').replaceChildren(metric('船舶',ships.length),metric('飞机',flights.length),metric('风险目标',enabled.filter(m=>risk(m)[1]==='high').length,'high'),metric('数据待关注',enabled.filter(needsAttention).length,'warning'));
+  $('summary').replaceChildren(metric('高风险',enabled.filter(m=>risk(m)[1]==='high').length,'high'),metric('待关注',enabled.filter(m=>risk(m)[1]!=='high'&&(needsAttention(m)||risk(m)[1]==='warning')).length,'warning'));
   for(const [id,list,unit] of [['vessel-count',ships,'艘'],['flight-count',flights,'架']]){
-    $(id).textContent=`${list.length} ${unit}`;
+    $(id).replaceChildren(el('strong',String(list.length)),el('span',unit));
     $(id).title=`已添加 ${list.length} ${unit}，其中 ${list.filter(m=>m.enabled).length} 个监控中（数量含暂停目标）`;
   }
   for(const [id,list] of [['vessels',ships],['flights',flights]]){
@@ -76,8 +76,8 @@ const eventTitles = {
   'flight.delay_exceeded':'延误超过阈值', 'flight.delay_recovered':'延误恢复', 'flight.cancelled':'航班取消',
   'flight.diverted':'航班备降', 'flight.status_restored':'航班状态恢复'
 };
-function renderTimeline(rows) {
-  const box=$('timeline');box.replaceChildren();
+function renderTimeline(id,rows) {
+  const box=$(id);box.replaceChildren();
   if(!rows.length){empty(box,'当前筛选下没有目标动态。');return;}
   rows.forEach(r=>{
     const assessment=r.assessment||{tone:'unknown',label:'未评估',description:'尚无对应的判断记录。'};
@@ -105,19 +105,26 @@ async function showEvent(id){
   for(const [label,value] of [['目标',d.monitor_name],['发生时间',fmt(d.occurred_at)+' JST'],['级别',severityLabel[d.severity]],['规则版本','v'+d.rule.version],['数据来源',d.raw_record.provider]]){const row=el('tr');row.append(el('th',label),el('td',value));facts.append(row);}
   box.append(facts);jsonDetails('原始记录、历史规则与完整证据',d);
 }
-async function loadTimeline(resetSnapshot=false) {
-  const request = ++timelineRequest;
-  const params = new URLSearchParams({limit:10,offset:timelineOffset,entry_type:$('timeline-type').value});
-  if($('timeline-kind').value)params.set('kind',$('timeline-kind').value);
-  if($('timeline-severity').value)params.set('severity',$('timeline-severity').value);
-  if (timelineSnapshot !== null && !resetSnapshot) params.set('snapshot',timelineSnapshot);
-  const page = await api('/timeline?'+params);
-  if (request !== timelineRequest) return;
-  timelineSnapshot = page.snapshot;
-  renderTimeline(page.items);
-  $('timeline-page').textContent = `第 ${Math.floor(page.offset/10)+1} / ${Math.max(1,Math.ceil(page.total/10))} 页 · 共 ${page.total} 条${page.offset?' · 历史快照':''}`;
-  $('timeline-prev').disabled = page.offset === 0;
-  $('timeline-next').disabled = page.offset + page.limit >= page.total;
+function initializeTimelines(){
+  for(const kind of ['vessel','aircraft']){
+    const prefix=kind+'-timeline',type=$(prefix+'-type'),severity=$(prefix+'-severity'),input=$(prefix+'-input');
+    const pager=TimelinePager.create(params=>{
+      const query=new URLSearchParams({...params,kind});if(!params.severity)query.delete('severity');
+      return api('/timeline?'+query);
+    },page=>{
+      $(prefix+'-error').textContent='';
+      renderTimeline(prefix,page.items);
+      $(prefix+'-page').textContent=`${page.page} / ${page.totalPages} 页 · ${page.total} 条`;
+      $(prefix+'-prev').disabled=page.page===1;$(prefix+'-next').disabled=page.page===page.totalPages;
+      input.max=page.totalPages;if(document.activeElement!==input)input.value=page.page;
+    });
+    timelines.set(kind,pager);
+    const run=async fn=>{const error=$(prefix+'-error');error.textContent='';try{await fn();}catch(e){error.textContent=e.message;}};
+    type.onchange=()=>{if(type.value==='quality')severity.value='';run(()=>pager.filter({entry_type:type.value,severity:severity.value}));};
+    severity.onchange=()=>{if(severity.value)type.value='events';run(()=>pager.filter({entry_type:type.value,severity:severity.value}));};
+    for(const [suffix,fn] of [['prev',pager.previous],['next',pager.next],['latest',pager.latest]])$(prefix+'-'+suffix).onclick=()=>run(fn);
+    $(prefix+'-jump').onsubmit=e=>{e.preventDefault();run(()=>pager.go(input.value));};
+  }
 }
 function renderHeader(items,updated){
   const enabled=items.filter(m=>m.enabled),states=enabled.map(risk);
@@ -130,12 +137,12 @@ function renderHeader(items,updated){
 }
 function renderMapNotes(){
   const period=schedulerSeconds===null?'每 10 分钟自动采集':schedulerSeconds?`每 ${schedulerSeconds/60} 分钟自动采集`:'自动采集已关闭';
-  $('vessel-note').textContent=period+' · 橙色为风险区域 · 灰色为历史定位';
-  $('flight-note').textContent=period+' · 灰色为历史定位';
+  $('vessel-note').textContent=period+' · 橙色为风险区域 · 灰色为历史定位 · Ctrl＋滚轮缩放';
+  $('flight-note').textContent=period+' · 灰色为历史定位 · Ctrl＋滚轮缩放';
 }
 async function refresh(){
   if(loading)return;loading=true;
-  try{dashboard=await api('/dashboard');renderMonitors(dashboard.monitors);renderHeader(dashboard.monitors,dashboard.updated_at);renderMapNotes();await loadTimeline(timelineOffset===0);}
+  try{dashboard=await api('/dashboard');renderMonitors(dashboard.monitors);renderHeader(dashboard.monitors,dashboard.updated_at);renderMapNotes();await Promise.all([...timelines].map(async([kind,pager])=>{try{await pager.refresh();}catch(e){$(kind+'-timeline-error').textContent=e.message;}}));}
   catch(e){$('system-status').textContent='服务连接失败';$('header-status').className='status high';throw e;}
   finally{loading=false;}
 }
@@ -225,10 +232,7 @@ async function addMonitor(){
 function addRegion(){openDialog('新建风险区域');const f=el('form'),grid=el('div',undefined,'form-grid');field(grid,'区域名称','name');for(const [n,l,v] of [['west','西经度',40],['south','南纬度',10],['east','东经度',50],['north','北纬度',20]]){const input=field(grid,l,n,'number',v);input.step='any';}f.append(grid,el('p','新增矩形区域适用于所有船舶，边界计为区域内；下一次有效采集时核查。经度东正西负，纬度北正南负。','detail-note'));submit(f,'添加区域',async data=>{const value=Object.fromEntries(data);for(const n of ['west','south','east','north'])value[n]=Number(value[n]);await api('/regions','POST',value);await refresh();await manageTargets();});$('dialog-body').append(f);}
 $('close-dialog').onclick=()=>$('dialog').close();$('add').onclick=()=>action(addMonitor);
 $('manage').onclick=()=>action(manageTargets);
-for(const id of ['timeline-kind','timeline-type','timeline-severity'])$(id).onchange=()=>{if(id==='timeline-type'&&$('timeline-type').value==='quality')$('timeline-severity').value='';if(id==='timeline-severity'&&$('timeline-severity').value)$('timeline-type').value='events';timelineOffset=0;timelineSnapshot=null;action(loadTimeline);};
-$('timeline-prev').onclick=()=>{timelineOffset=Math.max(0,timelineOffset-10);action(loadTimeline);};
-$('timeline-next').onclick=()=>{timelineOffset+=10;action(loadTimeline);};
-$('timeline-latest').onclick=()=>{timelineOffset=0;timelineSnapshot=null;action(loadTimeline);};
+initializeTimelines();
 
 action(async()=>{await RiskPlaces.load();const health=await api('/health');schedulerSeconds=health.scheduler_seconds;await refresh();});
 setInterval(()=>{if(!document.hidden&&!$('dialog').open)action(refresh);},15000);

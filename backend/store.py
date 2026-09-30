@@ -9,7 +9,7 @@ from .models import MonitorCreate, RegionCreate
 from .rules import ENGINE_VERSION, evaluate
 from .provider_registry import create_registry
 from .migrations import migrate_aircraft, migrate_management
-from .core_migration import migrate_core
+from .core_migration import migrate_core, retire_unused_feature_data
 from .regions import revision
 from .business_profile import describe_profile
 from .sdk_providers import NoLivePosition
@@ -71,6 +71,7 @@ class Store:
         migrate_aircraft(self.path)
         migrate_management(self.path)
         migrate_core(self.path)
+        retire_unused_feature_data(self.path)
 
     def connection(self):
         db = sqlite3.connect(self.path, timeout=15)

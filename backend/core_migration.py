@@ -3,6 +3,7 @@ import json
 import sqlite3
 import uuid
 from datetime import datetime, timezone
+from contextlib import closing
 from pathlib import Path
 from .regions import defaults
 from .rules import ENGINE_VERSION
@@ -65,8 +66,7 @@ def migrate_core(path):
             db.execute('INSERT INTO configuration_audit VALUES(?,?,?,?,?,?)',
                        (str(uuid.uuid4()),row['id'],'global_regions_enabled',dump({'rule_id':row['rule_id']}),dump({'rule_id':rule_id,'region_scope':'all_active'}),now))
         db.execute('CREATE INDEX IF NOT EXISTS idx_evaluations_observation ON evaluations(observation_id)')
-        # Retired feature tables in existing databases remain untouched as
-        # historical archives. New databases never create or use these tables.
+        # The separately versioned cleanup runs after this evidence migration.
         if db.execute('PRAGMA foreign_key_check').fetchall():
             raise RuntimeError('Core migration failed foreign-key validation')
         db.execute('INSERT INTO schema_versions VALUES(5,?)',(now,))
@@ -76,3 +76,26 @@ def migrate_core(path):
         raise
     finally:
         db.close()
+
+
+def retire_unused_feature_data(path):
+    """User-authorized removal of the unused news and AI tables, schema v6."""
+    with closing(sqlite3.connect(path, timeout=15)) as db, db:
+        if db.execute('SELECT 1 FROM schema_versions WHERE version=6').fetchone():
+            return
+        tables = ('ai_runs', 'ai_settings', 'public_news')
+        existing = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        now = datetime.now(timezone.utc)
+        if existing.intersection(tables):
+            backup = Path(str(path)+'.before-feature-cleanup.'+now.strftime('%Y%m%dT%H%M%S%fZ')+'.bak')
+            with sqlite3.connect(backup) as copy:
+                db.backup(copy)
+                if copy.execute('PRAGMA quick_check').fetchone()[0] != 'ok':
+                    raise RuntimeError('Feature cleanup backup failed validation')
+        db.execute('PRAGMA foreign_keys=ON')
+        db.execute('BEGIN IMMEDIATE')
+        for table in tables:
+            db.execute('DROP TABLE IF EXISTS '+table)
+        if db.execute('PRAGMA foreign_key_check').fetchall():
+            raise RuntimeError('Feature cleanup failed foreign-key validation')
+        db.execute('INSERT INTO schema_versions VALUES(6,?)', (now.isoformat(),))

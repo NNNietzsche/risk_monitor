@@ -53,21 +53,28 @@ window.RiskMaps = (() => {
       points.forEach(p=>{p.marker.classList.toggle('is-highlighted',p===active);p.marker.classList.toggle('is-dimmed',!!active&&p!==active);});
       if(active)svg.append(active.marker);
       const [x,y,w,h]=state.view;
-      hint.textContent=state.activeId&&!active?'该目标暂无有效定位':active&&(active.x<x||active.x>x+w||active.y<y||active.y>y+h)?'目标在当前视野外，请点击“显示全部目标”':'';
+      hint.textContent=state.activeId&&!active?'该目标暂无有效定位':active&&(active.x<x||active.x>x+w||active.y<y||active.y>y+h)?'目标在当前视野外，可缩小地图或返回全球':'';
       hint.hidden=!hint.textContent;
       return !!active;
     };
     function apply(){let [x,y,w,h]=state.view;w=Math.max(45,Math.min(720,w));h=w/2;x=Math.max(0,Math.min(720-w,x));y=Math.max(0,Math.min(360-h,y));state.view=[x,y,w,h];svg.setAttribute('viewBox',state.view.join(' '));points.forEach(p=>p.marker.setAttribute('transform',`translate(${p.x} ${p.y}) scale(${w/720})`));state.updateHighlight();}
-    function zoom(factor){const [x,y,w,h]=state.view,nw=Math.max(45,Math.min(720,w*factor));state.view=[x+(w-nw)/2,y+(h-nw/2)/2,nw,nw/2];apply();}
+    function zoom(factor,anchorX=.5,anchorY=.5){const [x,y,w,h]=state.view,nw=Math.max(45,Math.min(720,w*factor));state.view=[x+(w-nw)*anchorX,y+(h-nw/2)*anchorY,nw,nw/2];apply();}
+    svg.addEventListener('wheel',e=>{
+      if(!e.ctrlKey&&!e.metaKey)return;
+      e.preventDefault();
+      const rect=svg.getBoundingClientRect();
+      const delta=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?rect.height:1);
+      const unit=value=>Math.max(0,Math.min(1,value));
+      zoom(Math.exp(Math.max(-1,Math.min(1,delta*.002))),unit((e.clientX-rect.left)/rect.width),unit((e.clientY-rect.top)/rect.height));
+    },{passive:false});
     const controls=document.createElement('div');controls.className='map-controls';
     function button(text,fn,title){const b=document.createElement('button');b.textContent=text;b.type='button';b.setAttribute('aria-label',title||text);b.onclick=fn;controls.append(b);}
     button('+',()=>zoom(.5),'放大地图');button('−',()=>zoom(2),'缩小地图');
-    button('显示全部目标',()=>{if(!points.length)return;const xs=points.map(p=>p.x),ys=points.map(p=>p.y),xmin=Math.min(...xs),xmax=Math.max(...xs),ymin=Math.min(...ys),ymax=Math.max(...ys);const w=Math.min(720,Math.max(80,(xmax-xmin)*1.5,(ymax-ymin)*3));state.view=[(xmin+xmax-w)/2,(ymin+ymax-w/2)/2,w,w/2];apply();});
     button('全球',()=>{state.view=[0,0,720,360];apply();});
     let drag=null;
-    svg.onpointerdown=e=>{if(e.target.closest('.map-marker')||e.button!==0)return;drag={x:e.clientX,y:e.clientY,view:[...state.view]};svg.setPointerCapture(e.pointerId);};
+    svg.onpointerdown=e=>{if(e.target.closest('.map-marker')||e.button!==0||e.pointerType==='touch')return;e.preventDefault();drag={x:e.clientX,y:e.clientY,view:[...state.view]};svg.setPointerCapture(e.pointerId);};
     svg.onpointermove=e=>{if(!drag)return;const rect=svg.getBoundingClientRect(),scale=Math.min(rect.width/drag.view[2],rect.height/drag.view[3]);state.view=[drag.view[0]-(e.clientX-drag.x)/scale,drag.view[1]-(e.clientY-drag.y)/scale,drag.view[2],drag.view[3]];apply();};
-    svg.onpointerup=svg.onpointercancel=()=>{drag=null;};
+    svg.onpointerup=svg.onpointercancel=svg.onlostpointercapture=()=>{drag=null;};
     root.append(svg,controls,hint);
     if(!points.length){const note=document.createElement('span');note.className='map-empty';note.textContent='暂无有效定位 · 采集数据后显示';root.append(note);}
     apply();

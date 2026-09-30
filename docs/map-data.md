@@ -1,6 +1,6 @@
 # 地图、默认围栏与标识
 
-底图 `static/world-land.svg` 来自 Natural Earth 1:110m land；海域名称 `static/places.json` 来自其 1:10m marine polygons。公共领域数据，等距圆柱投影 x=(lon+180)×2、y=(90-lat)×2。坐标与所有区域使用同一投影，页面支持拖动、缩放、全部目标与高亮。
+底图 `static/world-land.svg` 来自 Natural Earth 1:110m land；海域名称 `static/places.json` 来自其 1:10m marine polygons。公共领域数据，等距圆柱投影 x=(lon+180)×2、y=(90-lat)×2。坐标与所有区域使用同一投影，地图容器固定 2:1 比例，初始完整显示世界范围。普通滚轮滚动页面，Ctrl＋滚轮（Mac 也支持 Command）围绕指针缩放；保留加减和全球复位按钮。鼠标拖动不选中文字，触屏单指保留页面纵向滚动。目标高亮不改变视野。
 
 - [Natural Earth 授权](https://www.naturalearthdata.com/about/terms-of-use/)
 - [陆地源数据](https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_land.geojson)，2026-09-11 下载，SHA256 `9e0729ee253ca7d7a5c4ae9395fb1902264c5377c52e224d13dd85010e2835d9`。

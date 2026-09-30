@@ -35,10 +35,36 @@ def test_v4_migration_preserves_evidence_archives_old_regions_and_demo(tmp_path)
         for t,rows in preserved.items():assert db.execute('SELECT * FROM '+t).fetchall()==rows
         assert not db.execute('PRAGMA foreign_key_check').fetchall()
         assert db.execute("SELECT config FROM rule_versions WHERE id='live'").fetchone()[0].find('region_id')>=0
-        for table in ['public_news','ai_runs','ai_settings']:
-            assert db.execute('SELECT id FROM '+table).fetchone()[0]=='retired'
+        assert not db.execute("SELECT name FROM sqlite_master WHERE name IN ('public_news','ai_runs','ai_settings')").fetchall()
     reopened=Store(path)
     assert reopened.detail('live')['rule']['version']==2
     assert len(reopened.regions(include_deleted=True))==3
     with sqlite3.connect(str(path)+'.before-core.bak') as backup:
         assert backup.execute('SELECT id FROM public_news').fetchone()[0]=='retired'
+
+
+def test_v5_feature_cleanup_is_backed_up_idempotent_and_preserves_core(tmp_path):
+    path=tmp_path/'current.db'
+    store=Store(path)
+    with sqlite3.connect(path) as db:
+        db.execute('DELETE FROM schema_versions WHERE version=6')
+        db.execute('CREATE TABLE public_news(id TEXT PRIMARY KEY,body TEXT)')
+        db.execute('CREATE TABLE ai_settings(id TEXT PRIMARY KEY)')
+        db.execute('CREATE TABLE ai_runs(id TEXT PRIMARY KEY,setting_id TEXT REFERENCES ai_settings(id),news_id TEXT REFERENCES public_news(id))')
+        db.execute("INSERT INTO public_news VALUES('unused','unused content')")
+        db.execute("INSERT INTO ai_settings VALUES('unused')")
+        db.execute("INSERT INTO ai_runs VALUES('unused','unused','unused')")
+        tables=[r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT IN ('schema_versions','public_news','ai_settings','ai_runs')")]
+        before={t:db.execute('SELECT * FROM '+t).fetchall() for t in tables}
+    for _ in range(2):Store(path)
+    with sqlite3.connect(path) as db:
+        assert before=={t:db.execute('SELECT * FROM '+t).fetchall() for t in tables}
+        assert not db.execute("SELECT name FROM sqlite_master WHERE name IN ('public_news','ai_runs','ai_settings')").fetchall()
+        assert db.execute('SELECT COUNT(*) FROM schema_versions WHERE version=6').fetchone()[0]==1
+        assert db.execute('PRAGMA quick_check').fetchone()[0]=='ok'
+        assert not db.execute('PRAGMA foreign_key_check').fetchall()
+    backups=list(tmp_path.glob('current.db.before-feature-cleanup.*.bak'))
+    assert len(backups)==1
+    with sqlite3.connect(backups[0]) as backup:
+        assert backup.execute('SELECT body FROM public_news').fetchone()[0]=='unused content'
+        assert backup.execute('SELECT COUNT(*) FROM ai_runs').fetchone()[0]==1
