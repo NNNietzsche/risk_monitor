@@ -17,7 +17,7 @@ cd "$APP"
 if [ ! -f /etc/risk-monitor/service.env ]; then
 cat > /etc/risk-monitor/service.env <<EOF
 RISK_DB_PATH=/var/lib/risk-monitor/risk.db
-RISK_POLL_SECONDS=1800
+RISK_POLL_SECONDS=600
 RISK_ALLOWED_HOSTS=$DOMAIN
 RISK_ALLOWED_ORIGINS=https://$DOMAIN
 PYTHONUNBUFFERED=1

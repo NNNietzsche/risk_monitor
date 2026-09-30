@@ -76,7 +76,7 @@ def test_default_half_hour_scheduler_and_local_reads_do_not_fetch(tmp_path,monke
     provider.fetch=lambda *args: calls.append(args)
     with TestClient(app) as c:
         ship(c)
-        assert c.get('/api/v1/health').json()['scheduler_seconds']==1800
+        assert c.get('/api/v1/health').json()['scheduler_seconds']==600
         for _ in range(3):
             assert c.get('/api/v1/dashboard').status_code==200
             assert c.get('/api/v1/public/sources').status_code==200

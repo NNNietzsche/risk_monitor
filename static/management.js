@@ -15,12 +15,10 @@ function takeProfile(value){
 }
 function addProfileEditor(m){
   const box=$('dialog-body'),f=el('form'),grid=el('div',undefined,'form-grid');
-  box.append(el('p',`资产属性：${TargetPresenter.metadata(m)}。分类来源：${m.business.category_source==='manual'?'人工维护':m.business.category_source==='provider'?'数据源':'尚未提供'}。`,'detail-note'));
   if(!m.deleted_at&&m.source?.profile_mode!=='provider'){
     profileFields(grid,m.kind,m.profile);f.append(grid,el('p','依据资产台账或已核实资料填写。留空使用来源信息；没有来源信息则显示未分类。','detail-note'));
     submit(f,'保存资产属性',async data=>{await api('/monitors/'+m.id+'/profile','PATCH',takeProfile(Object.fromEntries(data)));await refresh();await showMonitor(m.id);});box.append(f);
   }
-  if(m.source?.profile_mode==='provider')box.append(el('p','机型与分类由接口自动提供，按原文显示；接口未返回时显示缺失，不推测客货用途。','detail-note'));
   const remove=el('button',m.deleted_at?'恢复目标（保持暂停）':'删除监控目标','danger-button');
   remove.onclick=()=>action(async()=>{
     if(m.deleted_at)await api('/monitors/'+m.id+'/restore','POST');else await api('/monitors/'+m.id,'DELETE');
@@ -48,9 +46,6 @@ async function manageTargets(){
 async function refreshGroup(group,button){
   await action(async()=>{
     const result=await api('/poll?group='+group,'POST');await refresh();
-    const valid=result.items.filter(x=>['evaluated','duplicate'].includes(x.outcome)).length;
-    const skipped=result.items.filter(x=>x.outcome==='throttled').length;
-    const other=result.items.length-valid-skipped;
-    $('notice').textContent=result.items.length?`${group==='vessel'?'船舶':'航空'}刷新：${valid} 个有效返回，${skipped} 个因间隔限制跳过，${other} 个需查看数据状态。`:'该类别没有启用的监控目标。';
+    $('notice').textContent=result.items.length?`${group==='vessel'?'船舶':'航空'}已采集 ${result.items.length} 个目标；最新航次、航班及位置状态已显示。`:'该类别没有启用的监控目标。';
   },button);
 }

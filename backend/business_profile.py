@@ -5,7 +5,7 @@ AIRCRAFT_ROLES={'passenger':'客机','cargo':'货机','mixed':'客货混合','ot
 
 
 def describe_profile(monitor):
-    manual=monitor['profile'];data=(monitor.get('latest') or {}).get('data',{})
+    manual=monitor['profile'];data=(monitor.get('current') or monitor.get('latest') or {}).get('data',{})
     kind=monitor['kind']
     if monitor.get('source',{}).get('profile_mode')=='provider':
         category=data.get('aircraft_category') if kind!='vessel' else data.get('vessel_type')

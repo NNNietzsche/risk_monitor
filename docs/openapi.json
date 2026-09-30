@@ -2188,6 +2188,18 @@
               }
             ]
           },
+          "current": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
           "observations": {
             "items": {
               "$ref": "#/components/schemas/ObservationOut"
@@ -2408,6 +2420,18 @@
                 "type": "null"
               }
             ]
+          },
+          "current": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
           }
         },
         "type": "object",
@@ -2738,6 +2762,166 @@
               }
             ],
             "title": "Location Name"
+          },
+          "departure_port": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Departure Port"
+          },
+          "arrival_port": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrival Port"
+          },
+          "departure_port_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Departure Port Code"
+          },
+          "arrival_port_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrival Port Code"
+          },
+          "reported_destination": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reported Destination"
+          },
+          "vessel_flag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vessel Flag"
+          },
+          "vessel_length": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vessel Length"
+          },
+          "vessel_width": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vessel Width"
+          },
+          "speed_knots": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speed Knots"
+          },
+          "course_degrees": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 360.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Course Degrees"
+          },
+          "draught_meters": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draught Meters"
+          },
+          "has_newer_satellite_position": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Newer Satellite Position"
+          },
+          "flight_context": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "live",
+                  "recent",
+                  "scheduled"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flight Context"
           },
           "departure": {
             "anyOf": [
@@ -3265,17 +3449,6 @@
           "coverage": {
             "type": "string",
             "title": "Coverage"
-          },
-          "min_poll_seconds": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Min Poll Seconds"
           },
           "max_age_seconds": {
             "anyOf": [

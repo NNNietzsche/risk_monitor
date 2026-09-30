@@ -15,12 +15,13 @@ class NewVendor:
 def test_new_provider_uses_unchanged_creation_rules_api_and_timeline(tmp_path):
     app=create_app(tmp_path/'new.db',interval=0)
     app.state.store.registry.register(NewVendor(),name='Independent source',kinds=['vessel'],
-        capabilities={'vessel':['position']},required_fields={'vessel':['imo']},min_poll_seconds=150)
+        capabilities={'vessel':['position']},required_fields={'vessel':['imo']})
     with TestClient(app) as c:
         catalog=c.get('/api/v1/public/sources').json()
         assert catalog['independent-vendor']['required_fields']=={'vessel':['imo']}
         m=c.post('/api/v1/monitors',json={'kind':'vessel','name':'New vendor vessel','provider':'independent-vendor','imo':'9074729','region_id':'demo-zone'}).json()
-        assert m['source']['name']=='Independent source' and m['rule']['config']['min_poll_seconds']==150
+        assert m['source']['name']=='Independent source'
+        assert 'min_poll_seconds' not in m['rule']['config']
         result=c.post('/api/v1/monitors/'+m['id']+'/poll',json={}).json()
         assert result['outcome']=='evaluated'
         event=c.get('/api/v1/events/'+result['events'][0]).json()

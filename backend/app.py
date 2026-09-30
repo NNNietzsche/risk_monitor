@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parent.parent
 def create_app(db_path=None, interval=None):
     store = Store(db_path or os.getenv("RISK_DB_PATH", str(ROOT / "data" / "risk.db")))
     portal = Portal(store)
-    seconds = int(os.getenv("RISK_POLL_SECONDS", "1800")) if interval is None else interval
+    seconds = int(os.getenv("RISK_POLL_SECONDS", "600")) if interval is None else interval
     if seconds != 0 and seconds < 5:
         raise ValueError("RISK_POLL_SECONDS 必须为 0（关闭）或 >= 5")
 

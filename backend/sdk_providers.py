@@ -2,10 +2,7 @@
 import base64
 import dataclasses
 import re
-import threading
-import time
 from datetime import datetime, timezone
-from email.utils import parsedate_to_datetime
 from .provider_errors import FetchError
 from .models import Observation
 from .fr24_category import category_request, CATEGORIES
@@ -18,12 +15,14 @@ class NoLivePosition(ValueError):
 def flight_values(body):
     times=body.get('time') or {}
     real=times.get('real') or {}
-    generic=(((body.get('status') or {}).get('generic') or {}).get('status') or {}).get('text','').lower()
+    generic_status=((body.get('status') or {}).get('generic') or {}).get('status') or {}
+    generic=generic_status.get('text','').lower()
     status={'canceled':'cancelled','cancelled':'cancelled','diverted':'diverted'}.get(generic)
     if status is None:
-        if real.get('arrival'):status='landed'
+        if real.get('arrival') or generic=='landed':status='landed'
         elif real.get('departure'):status='active'
-        elif generic in {'scheduled','estimated','delayed'}:status='scheduled'
+        elif generic=='scheduled' or (generic in {'estimated','delayed'} and generic_status.get('type')=='departure'):status='scheduled'
+    if (body.get('status') or {}).get('ambiguous') is True:status=None
     values={'flight_status':status}
     for prefix,source in [('scheduled',times.get('scheduled') or {}),('actual',real),('estimated',times.get('estimated') or {})]:
         for side in ['departure','arrival']:
@@ -38,39 +37,16 @@ def epoch(value):
 
 
 class SDKGateway:
-    """One call per key, shared cache and source-wide backoff; no immediate retry."""
-    def __init__(self, clock=time.monotonic):
-        self.clock=clock
-        self.lock=threading.RLock()
-        self.cache={}
-        self.failures={}
-
-    def run(self, source, key, callback, ttl=120):
-        with self.lock:
-            now=self.clock()
-            failure=self.failures.get(source)
-            if failure and now<failure[0]:
-                raise FetchError('数据源冷却中，稍后再试', {'mock':False,'source':source,'cooldown':True})
-            cached=self.cache.get((source,key))
-            if cached and now-cached[0]<ttl:return cached[1]
-            try:
-                result=callback()
-            except Exception as exc:
-                payload=getattr(exc,'payload',{})
-                code=getattr(exc,'status_code',None) or payload.get('http_status')
-                retry=getattr(exc,'retry_after',None) or payload.get('retry_after')
-                delay=1800
-                if retry:
-                    try:delay=max(delay,float(retry))
-                    except (TypeError,ValueError):
-                        try:delay=max(delay,(parsedate_to_datetime(retry)-datetime.now(timezone.utc)).total_seconds())
-                        except (TypeError,ValueError,OverflowError):pass
-                self.failures[source]=(self.clock()+delay,True)
-                raise FetchError('SDK 数据源暂不可用'+(f'（HTTP {code}）' if code else '')+'，已暂停本源请求',
-                                 {'mock':False,'source':source,'http_status':code,'error_type':type(exc).__name__,
-                                  'retry_after':retry,'retry_seconds':delay,**payload}) from None
-            self.cache[(source,key)]=(self.clock(),result)
-            return result
+    """One attempt per requested call; no synthetic cache, throttle or cooldown."""
+    def run(self, source, key, callback):
+        try:
+            return callback()
+        except Exception as exc:
+            payload=getattr(exc,'payload',{})
+            code=getattr(exc,'status_code',None) or payload.get('http_status')
+            raise FetchError('SDK 数据源暂不可用'+(f'（HTTP {code}）' if code else ''),
+                             {'mock':False,'source':source,'http_status':code,
+                              'error_type':type(exc).__name__,**payload}) from None
 
 
 def fr24_request(kind, value):
@@ -83,6 +59,10 @@ def fr24_request(kind, value):
     from curl_cffi.requests import Session
     params=None
     if kind=='flight':url=Core.flight_data_url.format(value)
+    elif kind=='history':
+        url=Core.api_flightradar_base_url+'/flight/list.json'
+        params={'query':value,'fetchBy':'reg','limit':10,'page':1,
+                'timestamp':int(datetime.now(timezone.utc).timestamp())}
     else:
         url=Core.real_time_flight_tracker_data_url
         params=dataclasses.asdict(FlightTrackerConfig())
@@ -102,8 +82,10 @@ def fr24_request(kind, value):
 
 def mt_request(ship_id):
     from marinetraffic_api import MarineTrafficClient
+    from .marine_details import fetch_details
     with MarineTrafficClient(timeout=20) as client:body=client.get_position(ship_id)
     return {'mock':False,'body':body,'fetched_at':datetime.now(timezone.utc).isoformat(),
+            'details':fetch_details(ship_id),
             'source_id':str(ship_id),'evidence_format':'sdk_original_json',
             'note':'SDK 返回完整 JSON；当前 SDK 不暴露原始 HTTP 字节或响应头'}
 
@@ -126,8 +108,33 @@ class MarineTrafficProvider:
             if b.get(key) and target['asset'].get(key) and str(b[key])!=target['asset'][key]:raise ValueError('船舶标识不匹配')
         if b.get('lat') is None or b.get('lon') is None:raise ValueError('船舶未返回坐标')
         status={'Underway using Engine':'under_way','At Anchor':'at_anchor','Moored':'moored'}.get(b.get('navigationalStatus'),'unknown')
+        details=payload.get('details') or {}
+        joined={}
+        for name in ['general','voyage','info']:
+            item=(details.get(name) or {}).get('body') or {}
+            identity=(item.get('values') or {}).get('ship_id') if name=='info' else item.get('shipId')
+            if str(identity)!=ref:continue
+            ids=(item.get('values') or {}) if name=='info' else item
+            if any(ids.get(k) and target['asset'].get(k) and str(ids[k])!=target['asset'][k] for k in ['imo','mmsi']):continue
+            joined[name]=item
+        general=joined.get('general',{});voyage=joined.get('voyage',{});info=joined.get('info',{}).get('values',{})
+        values={'vessel_type':general.get('subtype'), 'vessel_flag':general.get('country'),
+                'vessel_length':general.get('length'),'vessel_width':general.get('width'),
+                'callsign':general.get('callsign'),'reported_destination':voyage.get('reportedDestination')}
+        # Port names and voyage dates are joined by port IDs, never by approximate geography.
+        for side,prefix in [('departure','last'),('arrival','next')]:
+            port_id=voyage.get(side+'PortId')
+            if port_id and str(port_id)==str(info.get(prefix+'_port_id')):
+                values[side+'_port']=info.get(prefix+'_port_name')
+                values[side+'_port_code']=info.get(prefix+'_port_unlocode')
+            label=voyage.get(side+'Label')
+            if voyage.get(side+'Timestamp') and label in {'ATD','ATA','ETD','ETA'}:
+                values[('actual_' if label.startswith('A') else 'estimated_')+side]=epoch(voyage[side+'Timestamp'])
         return Observation(kind='vessel',observed_at=epoch(b.get('timestamp')),latitude=b['lat'],longitude=b['lon'],
-                           navigation_status=status,location_name=b.get('areaName'))
+                           position_observed_at=epoch(b.get('timestamp')),
+                           navigation_status=status,location_name=b.get('areaName'),
+                           has_newer_satellite_position=b.get('hasNewerSatellitePosition') if type(b.get('hasNewerSatellitePosition')) is bool else None,
+                           speed_knots=b.get('speed'),course_degrees=b.get('course'),draught_meters=b.get('draught'),**values)
 
 
 class FlightRadarProvider:
@@ -142,9 +149,23 @@ class FlightRadarProvider:
         payload=self.gateway.run(self.name,(kind,ref),lambda:self.request(kind,ref))
         if kind=='flight':return payload
         matches=self._matches(payload,target)
-        if len(matches)!=1:return payload
-        fid=matches[0].id
         payload=dict(payload)
+        payload['lookup_at']=now.isoformat()
+        if not matches:
+            try:
+                payload['aircraft_history']=self.gateway.run(self.name,('history',ref),lambda:self.request('history',ref))
+            except (ValueError,ConnectionError,TimeoutError) as exc:
+                payload['aircraft_history_error']=getattr(exc,'payload',{'error':str(exc)})
+            selected=self._history_flight(payload,target)
+            fid=(selected.get('identification') or {}).get('id') if selected else None
+            if not fid:
+                previous=(target.get('current') or target.get('latest') or {}).get('data') or {}
+                fid=previous.get('flight_source_ref')
+            payload['queried_flight_id']=fid
+        elif len(matches)==1:
+            fid=matches[0].id
+        else:return payload
+        if not fid or not re.fullmatch('[0-9a-f]{6,16}',fid):return payload
         try:
             detail=self.gateway.run(self.name,('flight',fid),lambda:self.request('flight',fid))
             payload['current_flight_detail']=detail
@@ -152,12 +173,77 @@ class FlightRadarProvider:
             # Optional detail failure must not discard a valid primary position.
             payload['current_flight_detail_error']=getattr(exc,'payload',{'error':str(exc)})
         try:
-            # Separate backoff: a metadata outage must not block the position feed.
+            # Optional metadata failures must not discard a valid primary position.
             payload['aircraft_category_detail']=self.gateway.run(
                 self.name+'-category',fid,lambda:self.request('category',fid))
         except (ValueError,ConnectionError,TimeoutError) as exc:
             payload['aircraft_category_error']=getattr(exc,'payload',{'error':str(exc)})
         return payload
+
+    def _history_flight(self,payload,target):
+        response=(((payload.get('aircraft_history') or {}).get('body') or {}).get('result') or {}).get('response') or {}
+        rows=response.get('data') or []
+        now=datetime.fromisoformat(payload['lookup_at']).timestamp() if payload.get('lookup_at') else datetime.now(timezone.utc).timestamp()
+        # Reject cached history older than the normal source freshness window.
+        if not isinstance(response.get('timestamp'),(int,float)) or not -60<=now-response['timestamp']<=3600:return None
+        expected=target['rule']['config'].get('icao24')
+        rows=[b for b in rows if isinstance(b,dict) and (b.get('aircraft') or {}).get('registration')==target['asset']['registration']
+              and (not expected or str((b.get('aircraft') or {}).get('hex','')).lower()==expected)]
+        def times(b,kind,key):return ((b.get('time') or {}).get(kind) or {}).get(key) or 0
+        def status(b):return flight_values(b)['flight_status']
+        recent=[b for b in rows if times(b,'real','departure')<=now+60 and times(b,'scheduled','departure')<=now+60]
+        active=[b for b in recent if status(b)=='active' and now-times(b,'real','departure')<=86400]
+        if active:return max(active,key=lambda b:times(b,'real','departure'))
+        completed=[b for b in recent if status(b) in {'landed','cancelled','diverted'}]
+        last=max(completed,key=lambda b:times(b,'scheduled','departure'),default=None)
+        boundary=times(last,'real','arrival') or times(last,'scheduled','departure') if last else 0
+        planned=[b for b in rows if status(b)=='scheduled' and not times(b,'real','departure')
+                 and max(now-21600,boundary)<times(b,'scheduled','departure')<=now+86400]
+        if planned:return min(planned,key=lambda b:times(b,'scheduled','departure'))
+        return last
+
+    def _without_position(self,payload,target):
+        b=self._history_flight(payload,target)
+        if b is None:
+            detail=(payload.get('current_flight_detail') or {}).get('body') or {}
+            if (detail.get('identification') or {}).get('id')==payload.get('queried_flight_id'):
+                b=detail
+        if not b or (b.get('aircraft') or {}).get('registration')!=target['asset']['registration']:
+            raise NoLivePosition('当前未返回实时位置，也没有可核实的航班状态')
+        expected=target['rule']['config'].get('icao24')
+        if expected and str((b.get('aircraft') or {}).get('hex','')).lower()!=expected:
+            raise NoLivePosition('航班记录的飞机身份尚未核实')
+        values=flight_values(b)
+        if not values['flight_status']:
+            raise NoLivePosition('当前未返回实时位置，也没有可核实的航班状态')
+        now=datetime.fromisoformat(payload['lookup_at'])
+        if any(values.get(k) and values[k].timestamp()>now.timestamp()+60 for k in ['actual_departure','actual_arrival']):
+            raise NoLivePosition('来源实际起降时间无效，暂不能确认航班状态')
+        if values['flight_status']=='active' and (not values.get('actual_departure') or (now-values['actual_departure']).total_seconds()>86400):
+            raise NoLivePosition('航班起飞记录过旧，暂不能确认仍在飞行')
+        if values['flight_status']=='scheduled' and (not values.get('scheduled_departure') or not -21600<=(values['scheduled_departure']-now).total_seconds()<=86400):
+            raise NoLivePosition('未提供近期待执行航班，暂不能确认未起飞状态')
+        previous=(target.get('current') or target.get('latest') or {}).get('data') or {}
+        if previous.get('scheduled_departure') and values.get('scheduled_departure') and values['scheduled_departure']<datetime.fromisoformat(previous['scheduled_departure']):
+            raise NoLivePosition('来源返回较早航班，暂不能确认当前航班状态')
+        identity=b.get('identification') or {};fid=identity.get('id')
+        # Scheduled rows can have no flight ID yet; route/times remain source facts.
+        model=((b.get('aircraft') or {}).get('model') or {}).get('text')
+        airports=b.get('airport') or {}
+        for side,source in [('departure','origin'),('arrival','destination')]:
+            code=((airports.get(source) or {}).get('code') or {}).get('iata')
+            values[side]=code if re.fullmatch('[A-Z]{3}',code or '') else None
+        category=(payload.get('aircraft_category_detail') or {}).get('body') or {}
+        if fid and (category.get('aircraftInfo') or {}).get('reg')==target['asset']['registration'] and (category.get('flightInfo') or {}).get('flightId')==int(fid,16):
+            service=(category.get('aircraftInfo') or {}).get('service')
+            values['aircraft_category']=CATEGORIES.get(service) if type(service) is int else None
+        updated=((b.get('time') or {}).get('other') or {}).get('updated')
+        observed=max([0,updated or 0,*[int(values[k].timestamp()) for k in ['actual_departure','actual_arrival'] if values.get(k)]])
+        if not observed:
+            observed=int(datetime.fromisoformat(payload['lookup_at']).timestamp())
+        return Observation(kind='aircraft',observed_at=epoch(observed),flight_number=(identity.get('number') or {}).get('default'),
+            flight_source_ref=fid,aircraft_type=model,callsign=identity.get('callsign'),
+            flight_context='scheduled' if values['flight_status']=='scheduled' else 'recent',**values)
 
     def _matches(self,payload,target):
         from FlightRadarAPI.entities.flight import Flight
@@ -171,7 +257,7 @@ class FlightRadarProvider:
     def normalize(self,payload,target):
         if target['kind']=='flight':return self._flight(payload,target)
         matches=self._matches(payload,target)
-        if not matches:raise NoLivePosition('注册号查询成功，但来源当前未提供该飞机的实时位置；不能据此确认停飞或失联')
+        if not matches:return self._without_position(payload,target)
         if len(matches)!=1:raise ValueError('该注册号当前无唯一有效飞机定位')
         f=matches[0]
         expected=target['rule']['config'].get('icao24')
@@ -194,7 +280,7 @@ class FlightRadarProvider:
         if info.get('reg')==f.registration and flight_info.get('flightId')==int(f.id,16):
             service=info.get('service')
             values['aircraft_category']=CATEGORIES.get(service) if type(service) is int else None
-        return Observation(kind='aircraft',observed_at=epoch(f.time),latitude=f.latitude,longitude=f.longitude,
+        return Observation(kind='aircraft',observed_at=epoch(f.time),latitude=f.latitude,longitude=f.longitude,flight_context='live',
             position_observed_at=epoch(f.time),flight_number=f.number or None,flight_source_ref=f.id,
             callsign=f.callsign or None,aircraft_type=model,
             departure=f.origin_airport_iata if re.fullmatch('[A-Z]{3}',f.origin_airport_iata or '') else None,

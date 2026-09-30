@@ -63,3 +63,23 @@ button.timeline-link:hover { background: #eff6ff; color: #2563eb; }
 .source-attribution{margin:0 0 18px;font-size:12px;line-height:1.8;color:var(--muted)}
 .source-attribution a{color:#4870a6;text-decoration:none}
 .source-attribution a:hover{text-decoration:underline}
+
+/* Focus on route and state, with compact labelled facts beneath. */
+.detail-hero{padding:22px 24px;background:#f1f6fc;border:1px solid #dfe8f3;border-radius:12px;margin:12px 0 24px}
+.detail-badges{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.detail-eyebrow{color:#778ba4;font-size:11px;letter-spacing:.08em;margin-bottom:8px}
+.detail-route{font-size:23px;line-height:1.4;font-weight:650;color:#24496e;overflow-wrap:anywhere}
+.detail-subtitle{font-size:13px;color:#60748a;margin:8px 0 0}
+.detail-explanation{border-top:1px solid #dbe5f0;padding-top:14px;margin:16px 0 0;font-size:12px;line-height:1.8;color:#596e84}
+.detail-section{margin:22px 0}
+.detail-section h3,.detail-settings-title{font-size:14px;color:#31475e;margin:0 0 14px}
+.detail-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 24px;margin:0}
+.detail-facts>div{min-width:0}
+.detail-facts dt{color:#8793a3;font-size:11px;margin-bottom:5px}
+.detail-facts dd{font-size:13px;line-height:1.5;color:#33485e;margin:0;overflow-wrap:anywhere}
+.detail-table-wrap{overflow-x:auto}
+.detail-times{font-size:12px;white-space:nowrap}
+.detail-times th{font-size:11px;background:#f6f8fb;color:#7b889a;font-weight:500}
+.detail-source{font-size:11px;color:#8793a3;line-height:1.8;border-top:1px solid #e8edf3;padding-top:16px;margin:24px 0}
+.detail-settings-title{margin-top:24px}
+@media(max-width:480px){.detail-hero{padding:18px}.detail-route{font-size:19px}.detail-facts{gap:16px}.detail-times th,.detail-times td{padding:8px}}

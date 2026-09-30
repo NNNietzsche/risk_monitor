@@ -1,0 +1,146 @@
+{
+  "body": {
+    "shipId": 5554510,
+    "lat": -22.878859,
+    "lon": 6.7037616,
+    "speed": 18.2,
+    "course": 321,
+    "heading": 320,
+    "rateOfTurn": 0,
+    "draught": 15.9,
+    "timestamp": 1790663096,
+    "timezone": 0,
+    "navigationalStatus": "Underway using Engine",
+    "stationId": null,
+    "stationType": "Roaming",
+    "stationName": "",
+    "operatorName": "",
+    "areaName": "West Africa",
+    "areaCode": "WAFR",
+    "isVesselInRange": true,
+    "hasNewerSatellitePosition": true,
+    "isEligibleToRequestInmarsat": false
+  },
+  "details": {
+    "general": {
+      "body": {
+        "shipId": 5554510,
+        "name": "COSCO SHIPPING UNIVERSE",
+        "aisName": "COSCO UNIVERSE",
+        "imo": 9795610,
+        "eni": null,
+        "mmsi": 477157400,
+        "length": 399.9,
+        "width": 58.77,
+        "callsign": "VRRP4",
+        "country": "HONG KONG",
+        "countryCode": "HK",
+        "type": "Cargo - Hazard A (Major)",
+        "typeId": 71,
+        "comFleetGroupedTypeId": 10,
+        "comFleetGroupedTypeName": "CONTAINER SHIPS",
+        "typeColorId": 7,
+        "subtype": "Container Ship",
+        "yearBuilt": null,
+        "serviceStatus": null,
+        "homePort": null,
+        "aisTransponderClass": "Class A",
+        "isNavigationalAid": false,
+        "correspondingRoamingStationId": null,
+        "commercial_type": {
+          "market_id": 10,
+          "market_name": "CONTAINER SHIPS",
+          "size_class_name": "ULCV"
+        },
+        "aisShipType": "Cargo - Hazard A (Major)"
+      }
+    },
+    "voyage": {
+      "body": {
+        "shipId": 5554510,
+        "eta": 1791777600,
+        "etaTimezone": 2,
+        "etaCalc": null,
+        "etaCalcTimezone": null,
+        "reportedDestination": "NLRTM",
+        "distanceTravelled": null,
+        "distanceToGo": null,
+        "progress": 55.23,
+        "departurePortId": 290,
+        "departureTimestamp": 1789346460,
+        "departureLabel": "ATD",
+        "arrivalPortId": 2036,
+        "arrivalTimestamp": 1791777600,
+        "arrivalLabel": "ETA",
+        "lastPortTime": 1789346460,
+        "estimatedRouteFound": true,
+        "loadCondition": null,
+        "previousDeparturePortId": null,
+        "previousArrivalTimestamp": null
+      }
+    },
+    "info": {
+      "body": {
+        "values": {
+          "light_iw": false,
+          "vessel_history_limit": 1,
+          "country_code": "HK",
+          "show_chartering_btn": false,
+          "type_color_id": "7",
+          "has_voyage_forecast_snippet": true,
+          "reported_draught": "Reported Draught: 15.9m<br />Max Draught: 16m",
+          "no_data_available": false,
+          "dest_class": "gotocoords",
+          "port_data_x": "4.1418123",
+          "port_data_y": "51.943306",
+          "last_pos": 1790663080,
+          "last_pos_tooltip": 1790663080,
+          "elapsed": 1790663080,
+          "timezone_offset": 0,
+          "show_load_status": 2,
+          "vsl_length": 400,
+          "vsl_code": "",
+          "type_summary": "Cargo",
+          "load_status": {
+            "reported_draught": [
+              "Reported Draught",
+              "15.9m"
+            ],
+            "max_draught": [
+              "Max draught",
+              "16m"
+            ]
+          },
+          "vessel_in_fleet": false,
+          "ship_id": "5554510",
+          "ship_type": "7",
+          "mmsi": "477157400",
+          "imo": "9795610",
+          "type_name": "Container Ship",
+          "country": "HONG KONG",
+          "shipname": "COSCO SHIPPING UNIVERSE",
+          "course": "321",
+          "dwt": "198485",
+          "speed": "18.20",
+          "ship_lat": "-22.878859",
+          "ship_lon": "6.7037616",
+          "draught": "159",
+          "last_port_id": "290",
+          "last_port_name": "SINGAPORE",
+          "last_port_country": "SG",
+          "last_port_unlocode": "SGSIN",
+          "next_port_id": "2036",
+          "next_port_name": "ROTTERDAM",
+          "next_port_country": "NL",
+          "next_port_unlocode": "NLRTM",
+          "photos_count": "313",
+          "station_operator": "",
+          "past_track_url": "/en/ais/home/shipid:5554510/tracktype:7/lpt:1789346460",
+          "forecast_url": "/en/ais/home/shipid:5554510/tracktype:7",
+          "base_name": "Roaming",
+          "station_name": ""
+        }
+      }
+    }
+  }
+}

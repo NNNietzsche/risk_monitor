@@ -53,8 +53,8 @@ def test_identity_and_category_failure_do_not_block_position(tmp_path):
     d=store.detail(m['id'])
     assert d['latest']['data']['aircraft_category'] is None
     assert d['raw_records'][0]['payload']['aircraft_category_error']
-    assert provider.name not in gateway.failures
-    assert provider.name+'-category' in gateway.failures
+    assert store.poll(m['id'])['outcome']=='duplicate'
+    assert calls.count('registration')==2 and calls.count('category')==2
     # A different registration/flight must never lend its category to this aircraft.
     for reg,fid,expected in [('JA602F','abcdef12','Passenger'),('JA000A','abcdef12',None),('JA602F','abcdef13',None)]:
         body={'aircraftInfo':{'reg':reg,'service':0},'flightInfo':{'flightId':int(fid,16)}}

@@ -28,8 +28,7 @@ class PositionSource:
 
 def register(store, source):
     store.registry.register(source, name='Test position source', kinds=['vessel','aircraft'],
-                            capabilities={'vessel':['position'],'aircraft':['position']},
-                            min_poll_seconds=60)
+                            capabilities={'vessel':['position'],'aircraft':['position']})
 
 
 def test_only_current_live_sources_are_available_and_old_discovery_is_gone(tmp_path):
@@ -46,14 +45,14 @@ def test_only_current_live_sources_are_available_and_old_discovery_is_gone(tmp_p
         assert not client.get('/api/v1/monitors').json()
 
 
-def test_real_position_event_evidence_throttle_and_duplicate_recovery(tmp_path):
+def test_real_position_evidence_immediate_refresh_and_duplicate_recovery(tmp_path):
     store=Store(tmp_path/'live.db');source=PositionSource();register(store,source)
     target=store.create_monitor(MonitorCreate(kind='vessel',name='Ship',mmsi='230991780',provider=source.name,region_id='demo-zone'))
     result=store.poll(target['id'])
     event=store.event_detail(result['events'][0])
     assert event['evidence']['is_mock'] is False
     assert event['raw_record']['provider']==source.name
-    assert store.poll(target['id'])['outcome']=='throttled' and source.calls==1
+    assert store.poll(target['id'])['outcome']=='duplicate' and source.calls==2
     with pytest.raises(ValueError): store.poll(target['id'],'inside')
     with store.connection() as db:
         db.execute("UPDATE monitors SET health='error',last_poll_at=NULL WHERE id=?",(target['id'],))

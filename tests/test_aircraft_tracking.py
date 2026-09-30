@@ -52,7 +52,7 @@ def test_missing_feed_preserves_history_and_does_not_claim_grounded(tmp_path):
     store.providers[p.name]=FlightRadarProvider(SDKGateway(),lambda *args:{'body':{}})
     unlock(store,m['id']);assert store.poll(m['id'])['outcome']=='unavailable'
     current=store.detail(m['id']);assert current['latest']==before
-    assert current['health']=='unavailable' and '不能据此确认' in current['last_error']
+    assert current['health']=='unavailable' and '没有可核实' in current['last_error']
 
 
 def test_wrong_detail_identity_or_missing_category_never_uses_manual_label(tmp_path):

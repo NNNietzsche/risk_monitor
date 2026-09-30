@@ -32,7 +32,7 @@ window.RiskMaps = (() => {
     regions.forEach(r=>{const [w,s,e,n]=r.geometry.bbox, [x,y]=project(w,n);const rect=create('rect',{x,y,width:(e-w)*2,height:(n-s)*2,fill:'#ef9b5240',stroke:'#c47b3a','stroke-width':1,'vector-effect':'non-scaling-stroke'});rect.append(create('title',{},r.name));svg.append(rect);});
     const points=[];
     monitors.forEach(m=>{
-      const d=m.latest?.data;
+      const d=window.TargetPresenter?.position(m)||m.latest?.data;
       if(d?.longitude==null||d?.latitude==null)return;
       const [x,y]=project(d.longitude,d.latitude);
       const historical=(m.health!=='ok'||(d.position_observed_at&&(Date.now()-Date.parse(d.position_observed_at))/1000>m.rule.config.max_age_seconds))||!m.enabled||['cancelled'].includes(d.flight_status);

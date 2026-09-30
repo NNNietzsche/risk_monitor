@@ -1,6 +1,21 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const {metadata,flightLabel,route}=require('../static/target-presenter.js');
+const {status,position}=require('../static/target-presenter.js');
+test('satellite explanation requires fresh source evidence, port route ignores old ocean label',()=>{
+  const m={kind:'vessel',enabled:true,health:'stale',current:{fresh:true,data:{departure_port:'SINGAPORE',arrival_port:'ROTTERDAM',has_newer_satellite_position:true}}};
+  assert.equal(route(m,x=>x),'SINGAPORE → ROTTERDAM');
+  assert.equal(status(m)[0],'岸基未更新 · 有卫星船位');
+  m.current.fresh=false;assert.equal(status(m),null);
+  m.current.fresh=true;m.current.data.has_newer_satellite_position=null;assert.equal(status(m),null);
+});
+test('confirmed landing or schedule is independent of old map position',()=>{
+  const m={kind:'aircraft',name:'JA602F',enabled:true,health:'unavailable',current:{fresh:true,data:{flight_number:'NH8442',flight_status:'scheduled',flight_context:'scheduled',departure:'TPE',arrival:'NRT'}},latest:{data:{latitude:35,longitude:140,position_observed_at:'2026-09-30T00:00:00Z'}}};
+  assert.equal(status(m)[0],'未起飞');assert.equal(flightLabel(m),'JA602F · 待飞航班 NH8442');
+  assert.equal(route(m,x=>x),'TPE → NRT');assert.equal(position(m),m.latest.data);
+  m.current.data.flight_status='landed';m.current.data.flight_context='recent';assert.equal(status(m)[0],'最近航班已降落');
+  m.current.fresh=false;assert.equal(status(m),null);
+});
 test('demo contract: identity + ship type, model + aircraft role; no debug source suffix',()=>{
   assert.equal(metadata({kind:'vessel',asset:{imo:'9381234'},business:{category_label:'集装箱船'},source:{is_mock:false}}),'IMO 9381234 · 集装箱船');
   assert.equal(metadata({kind:'vessel',asset:{mmsi:'230000001'},business:{category_label:'油轮'},source:{is_mock:true}}),'MMSI 230000001 · 油轮');

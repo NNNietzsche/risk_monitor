@@ -92,6 +92,12 @@ class Store:
         m["flight"] = unpack(db.execute("SELECT * FROM flight_instances WHERE id=?", (m["flight_id"],)).fetchone())
         m["region"] = unpack(db.execute("SELECT * FROM regions WHERE id=?", (m["rule"]["config"].get("region_id"),)).fetchone(), ("geometry",))
         m["latest"] = unpack(db.execute("SELECT * FROM observations WHERE monitor_id=? AND quality='evaluated' ORDER BY observed_at DESC LIMIT 1", (monitor_id,)).fetchone(), ("data",))
+        m["current"] = unpack(db.execute("SELECT * FROM monitor_context WHERE monitor_id=?", (monitor_id,)).fetchone(), ("data",))
+        if m['current']:
+            age = (datetime.now(timezone.utc) - datetime.fromisoformat(m['current']['checked_at'])).total_seconds()
+            m['current']['fresh'] = (0 <= age <= m['rule']['config']['max_age_seconds']
+                and m['current']['checked_at'] == m['last_poll_at']
+                and m['health'] not in {'error','invalid','future','processing_error'})
         if m["latest"] and m["health"] == "ok":
             age = (datetime.now(timezone.utc) - datetime.fromisoformat(m["latest"]["observed_at"])).total_seconds()
             if age > m["rule"]["config"]["max_age_seconds"]:
@@ -136,8 +142,6 @@ class Store:
             config['source_ref'] = request.source_ref
         if request.kind=='flight' and request.aircraft_registration:
             config['aircraft_registration']=request.aircraft_registration
-        if spec["min_poll_seconds"]:
-            config["min_poll_seconds"] = spec["min_poll_seconds"]
         try:
             with self.lock, self.connection() as db:
                 db.execute("BEGIN IMMEDIATE")
@@ -220,8 +224,6 @@ class Store:
             if not m["source"]["is_mock"]:
                 if scenario != "sequence":
                     raise ValueError("真实数据源不支持模拟场景")
-                if m["last_poll_at"] and (datetime.now(timezone.utc)-datetime.fromisoformat(m["last_poll_at"])).total_seconds() < m["rule"]["config"].get("min_poll_seconds",60):
-                    return {"raw_id":None,"outcome":"throttled","events":[]}
             allowed = {"sequence"} if not m["source"]["is_mock"] else VESSEL_SCENARIOS if m["kind"] == "vessel" else FLIGHT_SCENARIOS
             if scenario not in allowed:
                 raise ValueError("此场景不适用于该监控类型")
@@ -260,6 +262,15 @@ class Store:
                     db.execute("BEGIN IMMEDIATE")
                     m = self._target(db, monitor_id)
                     age = (now - observation.observed_at).total_seconds()
+                    if age >= -60:
+                        db.execute('INSERT OR REPLACE INTO monitor_context VALUES (?,?,?,?)',
+                                   (monitor_id, raw_id, now.isoformat(), encoded(data)))
+                    # History may confirm a flight's status without a current position.
+                    # Preserve the previous evaluated position and its risk evidence.
+                    if m['kind']=='aircraft' and observation.flight_context and observation.latitude is None and age >= -60:
+                        db.execute("UPDATE raw_records SET outcome='unavailable' WHERE id=?", (raw_id,))
+                        db.execute("UPDATE monitors SET health='unavailable',last_error=NULL WHERE id=?", (monitor_id,))
+                        return {'raw_id':raw_id,'outcome':'unavailable','events':[]}
                     if age > m["rule"]["config"]["max_age_seconds"] or age < -60:
                         outcome = "stale" if age > 0 else "future"
                         db.execute("UPDATE raw_records SET outcome=? WHERE id=?", (outcome, raw_id))

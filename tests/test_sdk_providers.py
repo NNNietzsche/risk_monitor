@@ -8,17 +8,15 @@ from backend.sdk_providers import SDKGateway,MarineTrafficProvider,FlightRadarPr
 from backend.provider_errors import FetchError
 
 
-def test_sdk_backoff_cache_and_retry_after():
-    clock=[0];g=SDKGateway(lambda:clock[0]);calls=[]
+def test_sdk_each_poll_requests_again_and_failure_does_not_block_other_targets():
+    g=SDKGateway();calls=[]
     def request():calls.append(1);return {'body':{}}
     g.run('source','a',request);g.run('source','a',request)
-    assert len(calls)==1
+    assert len(calls)==2
     def fail():raise FetchError('rate limited',{'http_status':429,'retry_after':'3600'})
     with pytest.raises(FetchError):g.run('source','b',fail)
-    clock[0]=1801
-    with pytest.raises(FetchError):g.run('source','c',request)
-    assert len(calls)==1
-    clock[0]=3601;g.run('source','c',request);assert len(calls)==2
+    g.run('source','c',request)
+    assert len(calls)==3
 
 
 def test_marine_identity_position_and_age_are_not_invented(tmp_path):

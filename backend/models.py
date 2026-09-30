@@ -142,6 +142,19 @@ class Observation(StrictModel):
     scheduled_departure: datetime | None = None
     scheduled_arrival: datetime | None = None
     location_name: str | None = Field(default=None, max_length=120)
+    departure_port: str | None = Field(default=None, max_length=120)
+    arrival_port: str | None = Field(default=None, max_length=120)
+    departure_port_code: str | None = Field(default=None, max_length=12)
+    arrival_port_code: str | None = Field(default=None, max_length=12)
+    reported_destination: str | None = Field(default=None, max_length=120)
+    vessel_flag: str | None = Field(default=None, max_length=80)
+    vessel_length: float | None = Field(default=None, gt=0)
+    vessel_width: float | None = Field(default=None, gt=0)
+    speed_knots: float | None = Field(default=None, ge=0)
+    course_degrees: float | None = Field(default=None, ge=0, le=360)
+    draught_meters: float | None = Field(default=None, ge=0)
+    has_newer_satellite_position: bool | None = None
+    flight_context: Literal['live', 'recent', 'scheduled'] | None = None
     departure: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
     arrival: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
     position_observed_at: datetime | None = None

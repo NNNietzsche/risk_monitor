@@ -58,3 +58,8 @@ CREATE INDEX IF NOT EXISTS idx_raw_monitor_time ON raw_records(monitor_id,receiv
 CREATE INDEX IF NOT EXISTS idx_events_created ON risk_events(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_events_monitor_created ON risk_events(monitor_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_evaluations_monitor_time ON evaluations(monitor_id,evaluated_at DESC);
+-- Source context is independent of the last risk-valid position; raw evidence is immutable.
+CREATE TABLE IF NOT EXISTS monitor_context(
+ monitor_id TEXT PRIMARY KEY REFERENCES monitors(id),
+ raw_id TEXT NOT NULL REFERENCES raw_records(id), checked_at TEXT NOT NULL, data TEXT NOT NULL
+);

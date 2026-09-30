@@ -8,7 +8,7 @@
 - 账号 `test`，密码 `test`；由 Caddy 全站 Basic Auth 保护页面、静态资源及 API。访问凭据文件为服务器 `/etc/risk-monitor/test-access.json`（0600）及本地被 Git 忽略的 `data/server-access.json`。
 - 主机：45.77.8.153。代码 `/opt/risk-monitor`；数据库 `/var/lib/risk-monitor/risk.db`；配置 `/etc/risk-monitor/service.env`。
 - systemd 服务 `risk-monitor`，以 riskmonitor 用户运行，单 worker，绑定 `127.0.0.1:8000`。Caddy 对外提供 80/443，自动管理 HTTPS；8000 不公开。
-- 自动采集 1800 秒；启动后等待首个周期。船舶/航空分别手动刷新。页面与详情读取不调用供应商。
+- 自动采集 600 秒；启动后等待首个周期。船舶/航空分别手动刷新。页面与详情读取不调用供应商。
 - 保留既有两艘船、两架飞机、观测、规则和原始证据；本轮不修改 SDK，不重新导入或采集样例，AI 保持关闭。
 
 `deploy/configure-site.py` 生成 Caddy 配置并更新域名白名单和测试账号；更新环境变量时保留现有数据库路径、采集间隔和其他配置。它只配置，不重启服务。
