@@ -54,7 +54,7 @@ Windows/Python 3.12 与服务器 Ubuntu 26.04/Python 3.14 各 63 项 pytest 通�
 位置匹配测试：`node --test tests/test_locations.cjs`（Node仅用于开发测试，运行系统仍只需Python）。
 # 2026-09-30 航次、状态与详情更新验收
 
-本地及服务器各通过 81 项后端测试，10 项 Node 页面/地图测试通过。浏览器核对了本地与正式网站两类详情页的状态卡、航线、时间表和分组资料。船舶真实接口在服务器分别返回 HAMBURG → SINGAPORE、SINGAPORE → ROTTERDAM，两艘船型均为 Container Ship。COSCO 的公开位置过期且明确有较新卫星船位，列表显示“岸基未更新 · 有卫星船位”，地图保留历史位置；两架飞机在本次验收时均飞行中，Cargo/Passenger 分类正常。
+本地及服务器各通过 81 项后端测试，11 项 Node 页面/地图测试通过。浏览器核对了本地与正式网站两类详情页的状态卡、航线、时间表和分组资料。船舶真实接口在服务器分别返回 HAMBURG → SINGAPORE、SINGAPORE → ROTTERDAM，两艘船型均为 Container Ship。COSCO 的公开位置过期且明确有较新卫星船位，列表显示“岸基未更新 · 有卫星船位”，地图保留历史位置；两架飞机在本次验收时均飞行中，Cargo/Passenger 分类正常。
 
 已降落、未起飞、无坐标保留历史、错误身份/旧记录/未来实际时间等分支通过源响应样本及边界测试验证；未声称在本次实网验收中等到了两架飞机降落或下一航班指派。采集服务返回 scheduler_seconds=600，已完成船舶、航空各一次独立刷新，未等待完整 10 分钟周期。HTTPS、test/test 登录、静态资源、根域名跳转均正常。
 

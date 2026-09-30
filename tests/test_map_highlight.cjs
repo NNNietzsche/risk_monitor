@@ -12,11 +12,18 @@ class Node {
 function setup(){
   const roots={'vessel-map':new Node('div'),'flight-map':new Node('div')};
   const context={window:{},document:{getElementById:id=>roots[id],createElement:t=>new Node(t),createElementNS:(_,t)=>new Node(t)}};
+  vm.runInNewContext(fs.readFileSync('static/target-presenter.js','utf8'),context);
   vm.runInNewContext(fs.readFileSync('static/maps.js','utf8'),context);
   return {maps:context.window.RiskMaps,roots};
 }
 const target=(id,longitude=20)=>({id,name:id,kind:'vessel',enabled:true,health:'ok',state:{inside:id==='a'},latest:{observed_at:'2026-09-11T00:00:00Z',data:{longitude,latitude:60}}});
 const markers=root=>root.children[0].children.filter(n=>n.attributes['data-monitor-id']);
+test('first stale source position has a timestamp and does not require evaluated history',()=>{
+  const {maps,roots}=setup();const m={...target('new'),health:'stale',latest:null,current:{data:{latitude:15,longitude:45,observed_at:'2026-09-29T01:00:00Z'}}};
+  maps.draw('vessel-map',[m],()=>{});
+  const marker=markers(roots['vessel-map'])[0];assert(marker);
+  assert.match(marker.children.find(n=>n.tag==='title').textContent,/2026-09-29T01:00:00Z · 历史定位/);
+});
 test('highlight picks one target, retains risk color and view, clears and stays map-local',()=>{
   const {maps,roots}=setup();maps.draw('vessel-map',[target('a'),target('b')],()=>{});maps.draw('flight-map',[target('c')],()=>{});
   const [a,b]=markers(roots['vessel-map']);const before=JSON.stringify(roots['vessel-map'].children[0].attributes);const dot=a.children.find(n=>n.tag==='circle'&&n.attributes.r==='8');
