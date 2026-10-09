@@ -11,8 +11,12 @@ class LookupUnavailable(Exception):
 
 
 class EnrollmentService:
-    def __init__(self, marine=fetch_public, aviation=fr24_request):
+    def __init__(self, marine=fetch_public, aviation=fr24_request, gateway=None):
         self.marine, self.aviation = marine, aviation
+        self.gateway = gateway or SDKGateway()
+
+    def _aviation_request(self, kind, ref):
+        return self.gateway.run('flightradar-sdk-v1', (kind,ref), lambda:self.aviation(kind,ref))
 
     def resolve(self, request):
         try:
@@ -56,14 +60,14 @@ class EnrollmentService:
 
     def _aircraft(self, request):
         registration = request.identifier
-        live = self.aviation('registration',registration)
+        live = self._aviation_request('registration',registration)
         target = {'asset':{'registration':registration},'rule':{'config':{}}}
         matches = FlightRadarProvider(SDKGateway())._matches(live,target)
         if len(matches) > 1:
             raise ValueError('来源返回多个同注册号目标，暂无法确认飞机身份，请稍后重试')
         evidence = {'live':live}
         if not matches:
-            history = self.aviation('history',registration)
+            history = self._aviation_request('history',registration)
             evidence['history'] = history
             rows = (((history.get('body') or {}).get('result') or {}).get('response') or {}).get('data') or []
             if not isinstance(rows,list) or not any((r.get('aircraft') or {}).get('registration') == registration for r in rows if isinstance(r,dict)):

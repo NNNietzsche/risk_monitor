@@ -1,5 +1,16 @@
 'use strict';
 (() => {
+  function minutes(value){
+    if(typeof value!=='number'||!Number.isFinite(value))return '—';
+    const formatted=new Intl.NumberFormat('en-US',{maximumFractionDigits:1,useGrouping:false}).format(value);
+    const rounded=Number(formatted);
+    return (Math.abs(value-rounded)>1e-9?'约 ':'')+(Object.is(rounded,-0)?'0':formatted);
+  }
+  function eventSummary(event){
+    const evidence=event.evidence||{},threshold=evidence.rule_config?.threshold_minutes;
+    return event.type==='flight.delay_exceeded'&&typeof evidence.delay_minutes==='number'&&threshold!=null
+      ?`航班延误 ${minutes(evidence.delay_minutes)} 分钟，超过 ${threshold} 分钟阈值`:event.summary;
+  }
   const data=m=>m.current?.data||m.latest?.data||{};
   function position(m){
     return [m.current?.data,m.latest?.data].filter(d=>d?.latitude!=null&&d?.longitude!=null)
@@ -40,7 +51,7 @@
     const value=from||to?`${from?airport(from,d.departure_name):'出发地未提供'} → ${to?airport(to,d.arrival_name):'目的地未提供'}`:'航线未提供';
     return value+(m.kind==='aircraft'&&Object.keys(d).length&&(!m.enabled||(!m.current?.fresh&&m.health!=='ok'))?'（历史）':'');
   }
-  const api={metadata,flightLabel,route,data,position,status};
+  const api={metadata,flightLabel,route,data,position,status,minutes,eventSummary};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   else window.TargetPresenter=api;
 })();

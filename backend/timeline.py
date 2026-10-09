@@ -1,4 +1,5 @@
 """Display descriptions from the historical evaluation, never today's monitor state."""
+from .display import minutes, event_summary
 def timeline_assessment(row, evaluation, events):
     evidence = evaluation["evidence"] if evaluation else {}
     result = {"tone": "normal", "label": "状态更新", "description": "", "rule_version": evidence.get("rule_version")}
@@ -12,8 +13,8 @@ def timeline_assessment(row, evaluation, events):
         delay = evidence.get("delay_minutes")
         threshold = evidence.get("rule_config", {}).get("threshold_minutes")
         if highest == "info" and delay is not None and threshold is not None and delay > threshold:
-            return result | {"tone":"warning", "label":"持续关注", "description":"；".join(e["summary"] for e in events) + f"；延误仍为 {delay:g} 分钟，超过 {threshold} 分钟阈值。"}
-        return result | {"tone":{"info":"normal","warning":"warning","high":"danger"}[highest], "label":{"info":"状态恢复","warning":"关注","high":"风险"}[highest], "description":"；".join(e["summary"] for e in events)}
+            return result | {"tone":"warning", "label":"持续关注", "description":"；".join(event_summary(e) for e in events) + f"；延误仍为 {minutes(delay)} 分钟，超过 {threshold} 分钟阈值。"}
+        return result | {"tone":{"info":"normal","warning":"warning","high":"danger"}[highest], "label":{"info":"状态恢复","warning":"关注","high":"风险"}[highest], "description":"；".join(event_summary(e) for e in events)}
     data = row["data"]
     if data["kind"] == "aircraft" and not evidence.get('flight_risk_assessed'):
         return result | {"tone":"unknown", "label":"仅位置", "description":"飞机定位已更新；此监控仅评估位置，未评估航班延误、取消或备降。"}
@@ -34,6 +35,6 @@ def timeline_assessment(row, evaluation, events):
             basis = "起飞" if evidence["rule_config"]["delay_basis"] == "departure" else "到达"
             source = "实际" if evidence.get("time_basis", "").startswith("actual") else "预计"
             if delay > threshold:
-                return result | {"tone":"warning", "label":"持续关注", "description":f"按{source}{basis}时间计算，延误仍为 {delay:g} 分钟，超过 {threshold} 分钟阈值；本次未重复告警。"}
-            return result | {"description":f"按{source}{basis}时间计算，时间差 {delay:g} 分钟，未超过 {threshold} 分钟阈值。"}
+                return result | {"tone":"warning", "label":"持续关注", "description":f"按{source}{basis}时间计算，延误仍为 {minutes(delay)} 分钟，超过 {threshold} 分钟阈值；本次未重复告警。"}
+            return result | {"description":f"按{source}{basis}时间计算，时间差 {minutes(delay)} 分钟，未超过 {threshold} 分钟阈值。"}
     return result | {"tone":"unknown", "label":"状态更新", "description":"状态数据已更新；没有可展示的确定性判断。"}

@@ -2,7 +2,7 @@
 const $ = id => document.getElementById(id);
 const el = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
 const fmt = value => value ? new Intl.DateTimeFormat('zh-CN', {timeZone:'Asia/Tokyo', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false}).format(new Date(value)) : '—';
-const healthLabel = {ok:'数据有效',unknown:'尚无有效数据',stale:'数据过期',unavailable:'暂无实时位置',missing:'字段缺失',error:'采集失败',invalid:'数据无效',pending:'区域配置已更新 · 待核查'};
+const healthLabel = {ok:'数据有效',unknown:'尚无有效数据',stale:'数据过期',unavailable:'暂无实时位置',missing:'字段缺失',error:'采集失败',rate_limited:'数据源限流 · 等待重试',invalid:'数据无效',pending:'区域配置已更新 · 待核查'};
 const severityLabel = {high:'高风险',warning:'关注',info:'信息'};
 let dashboard = null, loading = false;
 let schedulerSeconds = null;
@@ -31,7 +31,7 @@ function risk(m) {
   if (m.kind === 'aircraft' && !m.state.flight_risk_assessed) return [m.latest?.data.navigation_status==='on_ground'?'地面 · 航班未评估':'位置已更新 · 航班未评估',''];
   if (m.state.flight_status==='landed') return ['已落地',m.state.exceeded?'warning':'good'];
   if (['cancelled','diverted'].includes(m.state.flight_status)) return [m.state.flight_status === 'cancelled' ? '已取消' : '已备降','high'];
-  return m.state.exceeded ? [`延误 ${m.state.delay_minutes} 分钟`,'high'] : ['延误未超阈值','good'];
+  return m.state.exceeded ? [`延误 ${TargetPresenter.minutes(m.state.delay_minutes)} 分钟`,'high'] : ['延误未超阈值','good'];
 }
 function metric(label,value,tone){const n=el('div',undefined,'risk-pill '+tone);n.append(el('span',label,'risk-label'),el('strong',String(value),'risk-value'));return n;}
 function renderMonitors(items) {
@@ -100,7 +100,7 @@ function renderTimeline(id,rows) {
 }
 async function showEvent(id){
   const d=await api('/events/'+id);openDialog('风险事件与判断依据');
-  const box=$('dialog-body');box.append(el('p',d.summary,'detail-note'));
+  const box=$('dialog-body');box.append(el('p',TargetPresenter.eventSummary(d),'detail-note'));
   const facts=el('table');
   for(const [label,value] of [['目标',d.monitor_name],['发生时间',fmt(d.occurred_at)+' JST'],['级别',severityLabel[d.severity]],['规则版本','v'+d.rule.version],['数据来源',d.raw_record.provider]]){const row=el('tr');row.append(el('th',label),el('td',value));facts.append(row);}
   box.append(facts);jsonDetails('原始记录、历史规则与完整证据',d);
@@ -136,7 +136,7 @@ function renderHeader(items,updated){
   $('updated').textContent=fmt(updated)+' JST';
 }
 function renderMapNotes(){
-  const period=schedulerSeconds===null?'每 10 分钟自动采集':schedulerSeconds?`每 ${schedulerSeconds/60} 分钟自动采集`:'自动采集已关闭';
+  const period=schedulerSeconds===null?'按 10 分钟周期分散采集':schedulerSeconds?`按 ${schedulerSeconds/60} 分钟周期分散采集`:'自动采集已关闭';
   $('vessel-note').textContent=period+' · 橙色为风险区域 · 灰色为历史定位 · Ctrl＋滚轮缩放';
   $('flight-note').textContent=period+' · 灰色为历史定位 · Ctrl＋滚轮缩放';
 }
@@ -187,6 +187,10 @@ async function showMonitor(id){
       ['AIS 报告目的地',d.reported_destination],['最近航行状态',({under_way:'航行中',at_anchor:'锚泊',moored:'靠泊'})[d.navigation_status]||'未提供']]);
   }
   detailTimes(box,m,d);
+  if(!isShip&&m.rule.config.delay_basis){
+    const basis=m.rule.config.delay_basis==='departure'?'起飞':'到达';
+    box.append(el('p',`延误按${basis}时间计算：实际时间优先，尚无实际时间时使用预计时间，与计划时间相减；超过 ${m.rule.config.threshold_minutes} 分钟提示风险。显示最多 1 位小数，判断使用原始精度。`,'detail-note'));
+  }
   if(isShip)detailFacts(box,'船舶资料',[
     ['IMO',m.asset?.imo],['MMSI',m.asset?.mmsi],['船型 · 来源原文',m.business.category_label],['船旗',d.vessel_flag],
     ['船长 / 船宽',d.vessel_length&&d.vessel_width?`${d.vessel_length} / ${d.vessel_width} m`:null],['呼号',d.callsign]]);

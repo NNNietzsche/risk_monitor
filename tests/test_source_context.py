@@ -109,3 +109,18 @@ def test_unverified_history_does_not_claim_landed(tmp_path,change):
 
 def test_arrival_estimate_without_takeoff_evidence_is_not_preflight():
     assert flight_values({'status':{'generic':{'status':{'text':'estimated','type':'arrival'}}}})['flight_status'] is None
+
+
+def test_verified_history_supplies_times_without_a_redundant_detail_request(tmp_path):
+    store=Store(tmp_path/'history-budget.db');m=aircraft(store);history,now=history_payload()
+    history['body']['result']['response']['data']=history['body']['result']['response']['data'][1:]
+    calls=[]
+    def request(kind,ref):
+        calls.append(kind)
+        if kind=='flight':raise AssertionError('history already contains the required flight details')
+        return history if kind=='history' else {'body':{}}
+    store.providers[m['provider']]=FlightRadarProvider(SDKGateway(),request)
+    assert store.poll(m['id'])['outcome']=='unavailable'
+    assert calls==['registration','history','category']
+    data=store.detail(m['id'])['current']['data']
+    assert data['flight_status']=='landed' and data['actual_arrival'] and data['scheduled_departure']

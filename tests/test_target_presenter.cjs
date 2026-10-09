@@ -2,6 +2,17 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const {metadata,flightLabel,route}=require('../static/target-presenter.js');
 const {status,position}=require('../static/target-presenter.js');
+const {minutes,eventSummary}=require('../static/target-presenter.js');
+test('delay display rounds once while historical evidence retains original precision',()=>{
+  assert.equal(minutes(7244/60),'约 120.7');
+  assert.equal(minutes(60.1),'60.1');
+  assert.equal(minutes(-0.01),'约 0');
+  assert.equal(minutes(null),'—');
+  const event={type:'flight.delay_exceeded',summary:'old text',evidence:{delay_minutes:7244/60,rule_config:{threshold_minutes:60}}};
+  const before=JSON.stringify(event);
+  assert.equal(eventSummary(event),'航班延误 约 120.7 分钟，超过 60 分钟阈值');
+  assert.equal(JSON.stringify(event),before);
+});
 test('satellite explanation requires fresh source evidence, port route ignores old ocean label',()=>{
   const m={kind:'vessel',enabled:true,health:'stale',current:{fresh:true,data:{departure_port:'SINGAPORE',arrival_port:'ROTTERDAM',has_newer_satellite_position:true}}};
   assert.equal(route(m,x=>x),'SINGAPORE → ROTTERDAM');

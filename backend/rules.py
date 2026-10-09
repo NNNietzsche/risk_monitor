@@ -1,6 +1,7 @@
 """Pure deterministic rules; no I/O or clock reads."""
 from datetime import datetime
 from .regions import contains, revision
+from .display import minutes
 ENGINE_VERSION = "1.2.0"
 
 
@@ -74,7 +75,7 @@ def evaluate(target, observation):
     if previous.get("flight_status") in {"cancelled", "diverted"}:
         events.append(("flight.status_restored", "info", "数据源报告航班已恢复常规状态"))
     if exceeded and previous.get("exceeded") is not True:
-        events.append(("flight.delay_exceeded", "high", f"航班延误 {delay:g} 分钟，超过 {config['threshold_minutes']} 分钟阈值"))
+        events.append(("flight.delay_exceeded", "high", f"航班延误 {minutes(delay)} 分钟，超过 {config['threshold_minutes']} 分钟阈值"))
     elif not exceeded and previous.get("exceeded") is True:
         events.append(("flight.delay_recovered", "info", "航班延误已回落到阈值以内"))
     return {"exceeded": exceeded, "delay_minutes": delay, "flight_status": status}, "evaluated", evidence, events

@@ -13,6 +13,7 @@ from .core_migration import migrate_core, retire_unused_feature_data
 from .regions import revision
 from .business_profile import describe_profile
 from .sdk_providers import NoLivePosition
+from .collection import CollectionDeferred
 
 
 def stamp():
@@ -96,7 +97,7 @@ class Store:
             age = (datetime.now(timezone.utc) - datetime.fromisoformat(m['current']['checked_at'])).total_seconds()
             m['current']['fresh'] = (0 <= age <= m['rule']['config']['max_age_seconds']
                 and m['current']['checked_at'] == m['last_poll_at']
-                and m['health'] not in {'error','invalid','future','processing_error'})
+                and m['health'] not in {'error','rate_limited','invalid','future','processing_error'})
         if m["latest"] and m["health"] == "ok":
             age = (datetime.now(timezone.utc) - datetime.fromisoformat(m["latest"]["observed_at"])).total_seconds()
             if age > m["rule"]["config"]["max_age_seconds"]:
@@ -222,11 +223,21 @@ class Store:
                 raise Conflict("该监控已暂停")
             now, raw_id = datetime.now(timezone.utc), uid()
             provider = self.providers[m["provider"]]
+            if m['kind']=='aircraft' and getattr(provider,'live_feed',None):
+                with self.connection() as db:
+                    registrations=[r[0] for r in db.execute(
+                        "SELECT a.registration FROM monitors m JOIN assets a ON a.id=m.asset_id "
+                        "WHERE m.provider=? AND m.kind='aircraft' AND m.enabled=1 AND m.deleted_at IS NULL",
+                        (m['provider'],))]
+                provider.live_feed.configure(registrations)
             error = None
             try:
                 payload = provider.fetch(m, now)
+            except CollectionDeferred:
+                return {'raw_id': None, 'outcome': 'deferred', 'events': []}
             except (TimeoutError, ConnectionError, ValueError) as exc:
                 payload, error = getattr(exc, "payload", {"error": str(exc)}), str(exc)
+            now = datetime.now(timezone.utc)
             body = encoded(payload)
             # Commit original data before any normalization or risk evaluation.
             with self.connection() as db:
@@ -236,7 +247,8 @@ class Store:
                 db.execute("UPDATE monitors SET last_poll_at=?,cursor=cursor+1 WHERE id=?", (now.isoformat(), monitor_id))
             if error:
                 with self.connection() as db:
-                    db.execute("UPDATE monitors SET health='error',last_error=? WHERE id=?", (error, monitor_id))
+                    health = 'rate_limited' if str(payload.get('http_status')) == '429' else 'error'
+                    db.execute("UPDATE monitors SET health=?,last_error=? WHERE id=?", (health, error, monitor_id))
                 return {"raw_id": raw_id, "outcome": "fetch_error", "events": []}
             try:
                 observation = provider.normalize(payload, m)
@@ -321,10 +333,23 @@ class Store:
             db.execute("UPDATE raw_records SET outcome=?,error=? WHERE id=?", (outcome, message, raw_id))
             db.execute("UPDATE monitors SET health=?,last_error=? WHERE id=?", (outcome, message, monitor_id))
 
+    def collection_targets(self):
+        with self.connection() as db:
+            return [dict(r) for r in db.execute('SELECT id,provider,kind,last_poll_at,created_at FROM monitors WHERE enabled=1 AND deleted_at IS NULL')]
+
+    def collection_blocked(self):
+        return {name: provider.gateway.retry_in(name) for name,provider in self.providers.items()
+                if hasattr(provider, 'gateway')}
+
+    def configure_collection(self, interval):
+        for provider in self.providers.values():
+            if getattr(provider,'live_feed',None):
+                provider.live_feed.configure((),interval)
+
     def poll_all(self, group=None):
         results = []
-        for m in self.monitors():
-            if m["enabled"] and (group is None or (m["kind"] == "vessel" if group == "vessel" else m["kind"] in {"flight","aircraft"})):
+        for m in sorted(self.collection_targets(), key=lambda m: (m['last_poll_at'] or '',m['created_at'],m['id'])):
+            if group is None or (m["kind"] == "vessel" if group == "vessel" else m["kind"] in {"flight","aircraft"}):
                 try:
                     results.append({"monitor_id": m["id"], **self.poll(m["id"])})
                 except Exception as exc:

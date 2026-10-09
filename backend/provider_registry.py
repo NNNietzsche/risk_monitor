@@ -49,13 +49,17 @@ class ProviderRegistry:
 def create_registry():
     registry=ProviderRegistry()
     from .sdk_providers import SDKGateway, MarineTrafficProvider, FlightRadarProvider
-    gateway=SDKGateway()
+    from .collection import RequestBudget
+    from .aircraft_batch import AircraftLiveFeed
+    from .sdk_providers import fr24_request
+    gateway=SDKGateway(fr24_budget=RequestBudget())
     registry.register(MarineTrafficProvider(gateway),name='MarineTraffic',kinds=['vessel'],
         capabilities={'vessel':['position']},required_fields={'vessel':['source_ref']},
         reference_label='船舶来源编号 shipId（非 IMO/MMSI）',
         url='https://www.marinetraffic.com/',coverage='船舶位置、航次与船型',
         max_age_seconds=3600,profile_mode='provider')
-    registry.register(FlightRadarProvider(gateway),name='Flightradar24',kinds=['aircraft','flight'],
+    live_feed=AircraftLiveFeed(gateway,fr24_request)
+    registry.register(FlightRadarProvider(gateway,live_feed=live_feed),name='Flightradar24',kinds=['aircraft','flight'],
         capabilities={'aircraft':['position','current_flight'],'flight':['position','flight_times','flight_status']},
         required_fields={'aircraft':['aircraft_registration'],'flight':['source_ref']},
         reference_label='当天航班来源编号（FR24 flight ID）',

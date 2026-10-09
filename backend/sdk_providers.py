@@ -4,6 +4,7 @@ import dataclasses
 import re
 from datetime import datetime, timezone
 from .provider_errors import FetchError
+from .collection import CollectionDeferred
 from .models import Observation
 from .fr24_category import category_request, CATEGORIES
 
@@ -37,14 +38,23 @@ def epoch(value):
 
 
 class SDKGateway:
-    """One attempt per requested call; no synthetic cache, throttle or cooldown."""
+    """One attempt per call, optionally sharing the production FR24 budget."""
+    def __init__(self, fr24_budget=None):
+        self.fr24_budget = fr24_budget
+
+    def retry_in(self, source):
+        return self.fr24_budget.retry_in() if self.fr24_budget and source.startswith('flightradar-sdk-v1') else 0
+
     def run(self, source, key, callback):
         try:
-            return callback()
+            return self.fr24_budget.run(callback) if self.fr24_budget and source.startswith('flightradar-sdk-v1') else callback()
+        except CollectionDeferred:
+            raise
         except Exception as exc:
             payload=getattr(exc,'payload',{})
             code=getattr(exc,'status_code',None) or payload.get('http_status')
-            raise FetchError('SDK 数据源暂不可用'+(f'（HTTP {code}）' if code else ''),
+            message = '数据源限流，已暂停请求，稍后自动继续' if str(code)=='429' else 'SDK 数据源暂不可用'+(f'（HTTP {code}）' if code else '')
+            raise FetchError(message,
                              {'mock':False,'source':source,'http_status':code,
                               'error_type':type(exc).__name__,**payload}) from None
 
@@ -140,18 +150,21 @@ class MarineTrafficProvider:
 
 class FlightRadarProvider:
     name='flightradar-sdk-v1'
-    def __init__(self,gateway,request=fr24_request):self.gateway,self.request=gateway,request
+    def __init__(self,gateway,request=fr24_request,live_feed=None):
+        self.gateway,self.request,self.live_feed=gateway,request,live_feed
     def validate_target(self,target):
         if target.kind=='flight' and not re.fullmatch('[0-9a-f]{6,16}',target.source_ref or ''):
             raise ValueError('航班来源编号需要当天 FR24 flight ID（小写十六进制）')
     def fetch(self,target,now):
         kind='flight' if target['kind']=='flight' else 'registration'
         ref=target['rule']['config']['source_ref'] if kind=='flight' else target['asset']['registration']
-        payload=self.gateway.run(self.name,(kind,ref),lambda:self.request(kind,ref))
+        payload=(self.live_feed.fetch(ref) if kind=='registration' and self.live_feed
+                 else self.gateway.run(self.name,(kind,ref),lambda:self.request(kind,ref)))
         if kind=='flight':return payload
         matches=self._matches(payload,target)
         payload=dict(payload)
         payload['lookup_at']=now.isoformat()
+        selected=None
         if not matches:
             try:
                 payload['aircraft_history']=self.gateway.run(self.name,('history',ref),lambda:self.request('history',ref))
@@ -167,12 +180,13 @@ class FlightRadarProvider:
             fid=matches[0].id
         else:return payload
         if not fid or not re.fullmatch('[0-9a-f]{6,16}',fid):return payload
-        try:
-            detail=self.gateway.run(self.name,('flight',fid),lambda:self.request('flight',fid))
-            payload['current_flight_detail']=detail
-        except (ValueError,ConnectionError,TimeoutError) as exc:
-            # Optional detail failure must not discard a valid primary position.
-            payload['current_flight_detail_error']=getattr(exc,'payload',{'error':str(exc)})
+        if selected is None:
+            try:
+                detail=self.gateway.run(self.name,('flight',fid),lambda:self.request('flight',fid))
+                payload['current_flight_detail']=detail
+            except (ValueError,ConnectionError,TimeoutError) as exc:
+                # Optional detail failure must not discard a valid primary position.
+                payload['current_flight_detail_error']=getattr(exc,'payload',{'error':str(exc)})
         try:
             # Optional metadata failures must not discard a valid primary position.
             payload['aircraft_category_detail']=self.gateway.run(

@@ -1,12 +1,14 @@
 # 服务器与发布
 
+2026-10-09 09:36 JST 已发布批量位置、分散采集与延误显示修复，页面版本 `20261009-batch1`。Windows 与服务器各 107 项后端测试、17 项前端测试通过。备份 `/var/backups/risk-monitor/20261009T003517Z-batch`，全部 12 张监控业务表内容摘要保持一致。完整历史校验必须逐行计算，避免把当前 1.1 GB 数据库读入内存；独立 systemd 发布任务退出后确保应用服务启动。
+
 服务器 45.77.8.153，HTTPS 入口 https://monitor.bocom-tokyo.site/ 。主域名 https://bocom-tokyo.site/ 跳转到该子域名。反向代理是 Caddy，非 Nginx；Basic Auth 测试账号 test / test。旧路径 /demo.html、/asset-risk.html 重定向根路径。
 
 - 应用目录 /opt/risk-monitor，Python 虚拟环境 .venv。
 - systemd 服务 risk-monitor，运行用户 riskmonitor，单 Uvicorn worker，回环 127.0.0.1:8000。
 - SQLite /var/lib/risk-monitor/risk.db；配置 /etc/risk-monitor/service.env。
 - Caddy /etc/caddy/Caddyfile；登录配置 /etc/risk-monitor/test-access.json。不可将配置中的秘密输出或打入公开发布包。
-- RISK_POLL_SECONDS=600；页面自动读取本地数据，无额外供应商请求。
+- RISK_POLL_SECONDS=600；按目标分散时隙执行，FR24 基础位置批量获取、详情分散请求，全部端点共享间隔与 429 退避；页面自动读取本地数据，无额外供应商请求。
 
 当前更新：先本地测试和线上数据库副本迁移演练；服务器独立暂存目录复跑测试；停止服务后备份代码、配置、SQLite，部署并启动。检查核心历史表的数量和内容摘要、全部既有目标 ID、外键、默认区域、登录、重定向和线上页面。失败恢复应用、配置和数据库。Caddy 配置无须改动。
 

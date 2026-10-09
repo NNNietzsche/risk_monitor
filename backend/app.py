@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import time
 from contextlib import asynccontextmanager, suppress
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +19,7 @@ from .models import Enrollment, RemarkPatch, MonitorPatch, PollRequest, RegionCr
 from .store import Store, NotFound, Conflict
 from .management import update_remark, remove_monitor, restore_monitor, change_region_deleted
 from .rules import ENGINE_VERSION
+from .collection import CollectionSchedule
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -26,18 +28,25 @@ ROOT = Path(__file__).resolve().parent.parent
 def create_app(db_path=None, interval=None, enrollment=None):
     store = Store(db_path or os.getenv("RISK_DB_PATH", str(ROOT / "data" / "risk.db")))
     dashboard_reader = Dashboard(store)
-    enrollment = enrollment or EnrollmentService()
+    enrollment = enrollment or EnrollmentService(gateway=store.providers['flightradar-sdk-v1'].gateway)
     seconds = int(os.getenv("RISK_POLL_SECONDS", "600")) if interval is None else interval
     if seconds != 0 and seconds < 5:
         raise ValueError("RISK_POLL_SECONDS 必须为 0（关闭）或 >= 5")
+    store.configure_collection(seconds)
 
     async def scheduler():
+        schedule = CollectionSchedule(seconds)
         while True:
-            await asyncio.sleep(seconds)
             try:
-                await asyncio.to_thread(store.poll_all)
+                targets = await asyncio.to_thread(store.collection_targets)
+                monitor_id = schedule.pick(targets, time.time(), store.collection_blocked())
+                if monitor_id:
+                    result = await asyncio.to_thread(store.poll, monitor_id)
+                    if result['outcome']=='deferred':
+                        schedule.defer(monitor_id)
             except Exception:
                 logging.exception("Monitoring cycle failed")
+            await asyncio.sleep(1)
 
     @asynccontextmanager
     async def lifespan(app):
