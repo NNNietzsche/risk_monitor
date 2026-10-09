@@ -25,30 +25,27 @@ class EnrollmentService:
             raise LookupUnavailable('数据源暂时无法查询，请稍后重试；本次未创建监控对象') from exc
 
     def _vessel(self, request):
-        ship_id = request.identifier
-        evidence = {}
-        if request.identifier_type != 'ship_id':
-            search = self.marine('search',request.identifier)
-            evidence['search'] = search
-            body = search.get('body') or {}
-            if not isinstance(body.get('results'),list):
-                raise LookupUnavailable('船舶查询返回格式异常，请稍后重试')
-            candidates = {str(row['id']) for row in body['results'] if isinstance(row,dict)
-                          and row.get('type') == request.identifier_type.upper()
-                          and str(row.get('value')) == request.identifier
-                          and re.fullmatch(r'[1-9][0-9]{0,17}',str(row.get('id','')))}
-            if not candidates:
-                raise ValueError('未找到与该标识码完全匹配的船舶，请核对号码或改用其他标识码')
-            if len(candidates) != 1:
-                raise ValueError('该标识码匹配到多艘船，请改用船舶页面中的 shipId')
-            ship_id = next(iter(candidates))
+        search = self.marine('search',request.identifier)
+        evidence = {'search': search}
+        body = search.get('body') or {}
+        if not isinstance(body.get('results'),list):
+            raise LookupUnavailable('船舶查询返回格式异常，请稍后重试')
+        candidates = {str(row['id']) for row in body['results'] if isinstance(row,dict)
+                      and row.get('type') == request.identifier_type.upper()
+                      and str(row.get('value')) == request.identifier
+                      and re.fullmatch(r'[1-9][0-9]{0,17}',str(row.get('id','')))}
+        if not candidates:
+            raise ValueError('未找到与该标识码完全匹配的船舶，请核对号码或改用其他标识码')
+        if len(candidates) != 1:
+            raise ValueError('该标识码匹配到多艘船，请核对号码或改用另一种标识码')
+        ship_id = next(iter(candidates))
         general = self.marine('general',ship_id)
         evidence['general'] = general
         body = general.get('body') or {}
         if str(body.get('shipId')) != ship_id:
             raise ValueError('未找到对应船舶，或来源返回的船舶身份不一致；请核对标识码')
-        if request.identifier_type != 'ship_id' and str(body.get(request.identifier_type)) != request.identifier:
-            raise ValueError('船舶资料与输入标识码不一致，请核对后使用 shipId')
+        if str(body.get(request.identifier_type)) != request.identifier:
+            raise ValueError('船舶资料与输入标识码不一致，请核对号码或改用另一种标识码')
         name = body.get('name') or body.get('aisName')
         if not isinstance(name,str) or not name.strip():
             raise ValueError('来源尚未提供可确认的船舶名称，请核对标识码或稍后重试')

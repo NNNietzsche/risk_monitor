@@ -27,7 +27,7 @@ def setup(tmp_path,marine=None):
     return app,source
 
 
-@pytest.mark.parametrize('kind,value,requests',[('ship_id','5630138',1),('imo','9811000',2),('mmsi','636026627',2)])
+@pytest.mark.parametrize('kind,value,requests',[('imo','9811000',2),('mmsi','636026627',2)])
 def test_one_identifier_creates_source_named_target_and_optional_remark(tmp_path,kind,value,requests):
     app,source=setup(tmp_path)
     with TestClient(app) as c:
@@ -47,7 +47,7 @@ def test_one_identifier_creates_source_named_target_and_optional_remark(tmp_path
 
 @pytest.mark.parametrize('body',[
     PAYLOAD|{'identifier':'9811001'},PAYLOAD|{'identifier':'abcd'},
-    PAYLOAD|{'identifier_type':'ship_id','identifier':'-1'},
+    PAYLOAD|{'identifier_type':'ship_id','identifier':'5630138'},
     PAYLOAD|{'identifier_type':'mmsi','identifier':'123'},
     PAYLOAD|{'provider':'mock-v1'},PAYLOAD|{'name':'manual'},PAYLOAD|{'region_id':'hormuz'}])
 def test_invalid_form_does_not_lookup_or_create(tmp_path,body):
@@ -77,8 +77,12 @@ def test_outage_and_identity_mismatch_leave_no_target(tmp_path):
     with TestClient(app) as c:
         result=c.post('/api/v1/monitors',json=PAYLOAD)
         assert result.status_code==503 and '暂时' in result.json()['detail']
-        source.side_effect=lambda *args:{'body':GENERAL|{'shipId':999}}
-        assert c.post('/api/v1/monitors',json=PAYLOAD|{'identifier_type':'ship_id','identifier':'5630138'}).status_code==422
+        def mismatched(kind,value):
+            if kind=='search':return {'body':{'results':[{'id':5630138,'type':'IMO','value':9811000}]}}
+            return {'body':GENERAL|{'imo':9811001}}
+        source.side_effect=mismatched
+        result=c.post('/api/v1/monitors',json=PAYLOAD)
+        assert result.status_code==422 and '不一致' in result.json()['detail']
         assert not c.get('/api/v1/monitors').json()
 
 

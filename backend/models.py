@@ -103,7 +103,7 @@ class RegionCreate(StrictModel):
 
 class Enrollment(StrictModel):
     kind: Literal['vessel', 'aircraft']
-    identifier_type: Literal['ship_id', 'imo', 'mmsi', 'registration']
+    identifier_type: Literal['imo', 'mmsi', 'registration']
     identifier: str = Field(min_length=1, max_length=20)
     remark: str = Field(default='', max_length=100)
 
@@ -115,11 +115,7 @@ class Enrollment(StrictModel):
             if self.identifier_type != 'registration' or not re.fullmatch(r'[A-Z0-9-]{3,12}',self.identifier):
                 raise ValueError('请填写有效飞机注册号，例如 JA602F')
         elif self.identifier_type == 'registration':
-            raise ValueError('船舶请选择 shipId、IMO 或 MMSI')
-        elif self.identifier_type == 'ship_id':
-            if not re.fullmatch(r'[0-9]{1,18}',self.identifier) or int(self.identifier) <= 0:
-                raise ValueError('shipId 应为正整数，请勿填写网址')
-            self.identifier = str(int(self.identifier))
+            raise ValueError('船舶请选择 IMO 或 MMSI')
         elif self.identifier_type == 'imo':
             if not re.fullmatch(r'[0-9]{7}',self.identifier):
                 raise ValueError('IMO 应为 7 位数字')

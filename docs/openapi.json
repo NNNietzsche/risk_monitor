@@ -1159,7 +1159,6 @@
           "identifier_type": {
             "type": "string",
             "enum": [
-              "ship_id",
               "imo",
               "mmsi",
               "registration"

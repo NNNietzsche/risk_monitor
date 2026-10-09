@@ -212,19 +212,40 @@ async function showMonitor(id){
 }
 async function addMonitor(){
   openDialog('添加监控对象');
-  const f=el('form'),grid=el('div',undefined,'form-grid');
-  const kind=select(grid,'监控类型 *','kind',[['vessel','船舶'],['aircraft','飞机']]);
+  const f=el('form',undefined,'enrollment-form'),grid=el('div',undefined,'form-grid');
+  const kind=el('input');kind.type='hidden';kind.name='kind';kind.value='vessel';f.append(kind);
+  const tabs=el('div',undefined,'enrollment-tabs');tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label','监控对象类型');
+  grid.id='enrollment-fields';grid.setAttribute('role','tabpanel');
+  const tabButtons=new Map();
+  for(const [value,label] of [['vessel','船舶'],['aircraft','飞机']]){
+    const tab=el('button',label);tab.type='button';tab.id='enrollment-'+value+'-tab';tab.setAttribute('role','tab');tab.setAttribute('aria-controls',grid.id);
+    tab.onclick=()=>showKind(value);tab.onkeydown=e=>{
+      const next={ArrowLeft:value==='vessel'?'aircraft':'vessel',ArrowRight:value==='vessel'?'aircraft':'vessel',Home:'vessel',End:'aircraft'}[e.key];
+      if(next){e.preventDefault();showKind(next);tabButtons.get(next).focus();}
+    };tabButtons.set(value,tab);tabs.append(tab);
+  }
+  f.append(tabs);
   const type=select(grid,'标识码类型 *','identifier_type',[]);
+  const typeField=type.parentElement;
   const identifier=field(grid,'标识码','identifier');identifier.autocomplete='off';identifier.maxLength=20;
-  const remark=field(grid,'备注','remark','text','',false);remark.maxLength=100;remark.placeholder='例如：项目简称、内部资产编号';
+  const remark=field(grid,'备注','remark','text','',false);remark.maxLength=100;remark.placeholder='例如：项目简称、内部资产编号';remark.parentElement.classList.add('wide');
   const help=el('p',undefined,'field-help wide');help.id='identifier-help';identifier.setAttribute('aria-describedby',help.id);grid.append(help);
   const fieldHelp=()=>{
-    const rules={ship_id:['例如：5630138','MarineTraffic 船舶页面中的 shipId，填写正整数。','[0-9]{1,18}'],imo:['例如：9811000','IMO 为 7 位数字，系统会检查校验位。','[0-9]{7}'],mmsi:['例如：636026627','MMSI 为 9 位数字。','[0-9]{9}'],registration:['例如：JA602F','按飞机注册号持续跟踪当前及后续航班。','[A-Za-z0-9-]{3,12}']};
+    const rules={imo:['例如：9811000','IMO 为 7 位数字，系统会检查校验位。','[0-9]{7}'],mmsi:['例如：636026627','MMSI 为 9 位数字。','[0-9]{9}'],registration:['例如：JA602F','按飞机注册号持续跟踪当前及后续航班。','[A-Za-z0-9-]{3,12}']};
     const [placeholder,text,pattern]=rules[type.value];identifier.placeholder=placeholder;identifier.pattern=pattern;identifier.inputMode=type.value==='registration'?'text':'numeric';
-    help.textContent=text+(kind.value==='vessel'?' 三种标识码任选一种；船名自动读取，所有风险区域自动适用。':'');
+    identifier.parentElement.firstElementChild.firstChild.textContent=kind.value==='aircraft'?'飞机注册号':'标识码';
+    help.textContent=text+(kind.value==='vessel'?' 可选 IMO 或 MMSI；船名自动读取，所有风险区域自动适用。':'');
   };
-  const redraw=()=>{type.replaceChildren();(kind.value==='vessel'?[['ship_id','shipId'],['imo','IMO'],['mmsi','MMSI']]:[['registration','飞机注册号']]).forEach(([v,t])=>{const o=el('option',t);o.value=v;type.append(o);});identifier.value='';fieldHelp();};
-  kind.onchange=redraw;type.onchange=()=>{identifier.value='';fieldHelp();};redraw();f.append(grid);
+  const drafts={vessel:{identifier_type:'imo',identifier:'',remark:''},aircraft:{identifier_type:'registration',identifier:'',remark:''}};
+  function showKind(value){
+    if(type.options.length)drafts[kind.value]={identifier_type:type.value,identifier:identifier.value,remark:remark.value};
+    kind.value=value;type.replaceChildren();(value==='vessel'?[['imo','IMO'],['mmsi','MMSI']]:[['registration','飞机注册号']]).forEach(([v,t])=>{const o=el('option',t);o.value=v;type.append(o);});
+    const draft=drafts[value];type.value=draft.identifier_type;identifier.value=draft.identifier;remark.value=draft.remark;
+    typeField.hidden=value==='aircraft';identifier.parentElement.classList.toggle('wide',value==='aircraft');
+    for(const [name,tab] of tabButtons){const active=name===value;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;}
+    grid.setAttribute('aria-labelledby',tabButtons.get(value).id);fieldHelp();
+  }
+  type.onchange=()=>{identifier.value='';fieldHelp();};showKind('vessel');f.append(grid);
   const progress=el('p','填写带 * 的必填项。系统会先查询并核对身份。','enrollment-state');progress.setAttribute('role','status');f.append(progress);
   submit(f,'查询并添加',async data=>{
     progress.textContent='正在查询身份并读取首次状态，请稍候…';

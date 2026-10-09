@@ -2,7 +2,7 @@
 
 以 `docs/openapi.json` 及运行服务 `/docs` 为准。
 
-- `POST /api/v1/monitors`：`{"kind":"vessel","identifier_type":"imo","identifier":"9811000","remark":""}`；船舶可选 ship_id / imo / mmsi。飞机为 aircraft + registration。必填前三项，备注可省略。
+- `POST /api/v1/monitors`：`{"kind":"vessel","identifier_type":"imo","identifier":"9811000","remark":""}`；船舶可选 imo / mmsi，界面默认 IMO。飞机为 aircraft + registration。必填前三项，备注可省略；外部不再接受 ship_id。
 - 查询核验后创建并执行首次采集。来源暂时不可用 503；格式、查无结果、匹配不唯一或身份冲突 422；重复目标 409。已经核实身份但首次定位失败时，创建仍成功，详情显示采集状态。
 - `GET /monitors`、`GET /monitors/{id}`；后者包含原始记录、历史评估与配置审计。`regions` 为适用的全部有效区域；不再返回单个绑定 region。
 - `PATCH /monitors/{id}` 控制 enabled；`PATCH /monitors/{id}/remark` 修改可选备注；`POST /monitors/{id}/rule-versions` 修改航空延误阈值。
