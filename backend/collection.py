@@ -13,11 +13,14 @@ class CollectionDeferred(FetchError):
 
 class RequestBudget:
     def __init__(self, spacing=3.0, clock=time.monotonic, sleep=time.sleep,
-                 wall_clock=lambda: datetime.now(timezone.utc)):
+                 wall_clock=lambda: datetime.now(timezone.utc), backoff_statuses=('429',),
+                 pause_message='数据源限流'):
         self.spacing, self.clock, self.sleep, self.wall_clock = spacing, clock, sleep, wall_clock
         self.lock = threading.RLock()
         self.next_request = self.blocked_until = 0.0
         self.failures = 0
+        self.backoff_statuses = set(map(str, backoff_statuses))
+        self.pause_message = pause_message
 
     def retry_in(self):
         with self.lock:
@@ -40,7 +43,7 @@ class RequestBudget:
         with self.lock:
             remaining = self.retry_in()
             if remaining:
-                raise CollectionDeferred(f'数据源限流，约 {math.ceil(remaining)} 秒后自动继续',
+                raise CollectionDeferred(f'{self.pause_message}，约 {math.ceil(remaining)} 秒后自动继续',
                     {'request_sent': False, 'retry_in_seconds': math.ceil(remaining)})
             self.sleep(max(0.0, self.next_request - self.clock()))
             self.next_request = self.clock() + self.spacing
@@ -49,11 +52,12 @@ class RequestBudget:
             except Exception as exc:
                 payload = getattr(exc, 'payload', {})
                 code = getattr(exc, 'status_code', None) or payload.get('http_status')
-                if str(code) == '429':
+                if str(code) in self.backoff_statuses:
                     self.failures += 1
                     # Observed Retry-After: 0 is not permission to retry in a loop.
                     fallback = min(900, 60 * 2 ** min(self.failures - 1, 4))
-                    self.blocked_until = self.clock() + max(fallback, self._retry_after(payload.get('retry_after')))
+                    retry_after = payload.get('retry_after', getattr(exc, 'retry_after', None))
+                    self.blocked_until = self.clock() + max(fallback, self._retry_after(retry_after))
                 raise
             self.failures = 0
             return result

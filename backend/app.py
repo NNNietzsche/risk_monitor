@@ -39,7 +39,8 @@ def create_app(db_path=None, interval=None, enrollment=None):
         while True:
             try:
                 targets = await asyncio.to_thread(store.collection_targets)
-                monitor_id = schedule.pick(targets, time.time(), store.collection_blocked())
+                blocked = await asyncio.to_thread(store.collection_blocked)
+                monitor_id = schedule.pick(targets, time.time(), blocked)
                 if monitor_id:
                     result = await asyncio.to_thread(store.poll, monitor_id)
                     if result['outcome']=='deferred':

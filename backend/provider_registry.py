@@ -52,7 +52,9 @@ def create_registry():
     from .collection import RequestBudget
     from .aircraft_batch import AircraftLiveFeed
     from .sdk_providers import fr24_request
-    gateway=SDKGateway(fr24_budget=RequestBudget())
+    gateway=SDKGateway(fr24_budget=RequestBudget(),
+                       marine_budget=RequestBudget(backoff_statuses=('403','429'),
+                           pause_message='船舶数据源暂时拒绝访问'))
     registry.register(MarineTrafficProvider(gateway),name='MarineTraffic',kinds=['vessel'],
         capabilities={'vessel':['position']},required_fields={'vessel':['source_ref']},
         reference_label='船舶来源编号 shipId（非 IMO/MMSI）',

@@ -1,6 +1,7 @@
 """SDK boundary: vendor calls and shapes end here; rules consume Observation only."""
 import base64
 import dataclasses
+import logging
 import re
 from datetime import datetime, timezone
 from .provider_errors import FetchError
@@ -38,25 +39,38 @@ def epoch(value):
 
 
 class SDKGateway:
-    """One attempt per call, optionally sharing the production FR24 budget."""
-    def __init__(self, fr24_budget=None):
+    """One attempt per call, with independent shared budgets for each source."""
+    def __init__(self, fr24_budget=None, marine_budget=None):
         self.fr24_budget = fr24_budget
+        self.marine_budget = marine_budget
+
+    def budget(self, source):
+        if source.startswith('flightradar-sdk-v1'):return self.fr24_budget
+        if source.startswith('marinetraffic-sdk-v1'):return self.marine_budget
 
     def retry_in(self, source):
-        return self.fr24_budget.retry_in() if self.fr24_budget and source.startswith('flightradar-sdk-v1') else 0
+        budget = self.budget(source)
+        return budget.retry_in() if budget else 0
 
-    def run(self, source, key, callback):
+    def run(self, source, key, callback, *, pace=True):
         try:
-            return self.fr24_budget.run(callback) if self.fr24_budget and source.startswith('flightradar-sdk-v1') else callback()
+            budget = self.budget(source) if pace else None
+            return budget.run(callback) if budget else callback()
         except CollectionDeferred:
             raise
         except Exception as exc:
             payload=getattr(exc,'payload',{})
             code=getattr(exc,'status_code',None) or payload.get('http_status')
             message = '数据源限流，已暂停请求，稍后自动继续' if str(code)=='429' else 'SDK 数据源暂不可用'+(f'（HTTP {code}）' if code else '')
+            if str(code)=='403' and source.startswith('marinetraffic-sdk-v1'):
+                message = '船舶数据源拒绝访问（HTTP 403），稍后自动重试'
+            if pace and budget and str(code) in budget.backoff_statuses:
+                logging.warning('Source request rejected: endpoint=%s status=%s cooldown_seconds=%s',
+                                source,code,round(budget.retry_in()))
             raise FetchError(message,
                              {'mock':False,'source':source,'http_status':code,
-                              'error_type':type(exc).__name__,**payload}) from None
+                              'error_type':type(exc).__name__,
+                              'retry_after':getattr(exc,'retry_after',None),**payload}) from None
 
 
 def fr24_request(kind, value):
@@ -90,26 +104,32 @@ def fr24_request(kind, value):
         return payload
 
 
-def mt_request(ship_id):
+def mt_request(ship_id, gateway=None):
     from marinetraffic_api import MarineTrafficClient
     from .marine_details import fetch_details
-    with MarineTrafficClient(timeout=20) as client:body=client.get_position(ship_id)
+    with MarineTrafficClient(timeout=20) as client:
+        body=(gateway.run('marinetraffic-sdk-v1-position',ship_id,lambda:client.get_position(ship_id))
+              if gateway else client.get_position(ship_id))
     return {'mock':False,'body':body,'fetched_at':datetime.now(timezone.utc).isoformat(),
-            'details':fetch_details(ship_id),
+            'details':fetch_details(ship_id,gateway=gateway),
             'source_id':str(ship_id),'evidence_format':'sdk_original_json',
             'note':'SDK 返回完整 JSON；当前 SDK 不暴露原始 HTTP 字节或响应头'}
 
 
 class MarineTrafficProvider:
     name='marinetraffic-sdk-v1'
-    def __init__(self,gateway,request=mt_request):self.gateway,self.request=gateway,request
+    def __init__(self,gateway,request=None):
+        self.gateway=gateway
+        self.request=request or (lambda ref:mt_request(ref,gateway=gateway))
     def validate_target(self,target):
         if not target.source_ref or not target.source_ref.isdigit() or not 0<int(target.source_ref)<2**63:
             raise ValueError('船舶来源编号必须为正整数 shipId')
     def fetch(self,target,now):
         ref=target['rule']['config']['source_ref']
         if not ref.isdigit() or not 0<int(ref)<2**63:raise ValueError('船舶来源编号必须为正整数 shipId')
-        return self.gateway.run(self.name,ref,lambda:self.request(int(ref)))
+        # Pace each real HTTP call inside the adapter, not this collection wrapper.
+        # A successful position must not reset backoff after a failed detail.
+        return self.gateway.run(self.name,ref,lambda:self.request(int(ref)),pace=False)
     def normalize(self,payload,target):
         b=payload['body'];ref=target['rule']['config']['source_ref']
         if type(b.get('shipId')) is not int or str(b['shipId'])!=ref:raise ValueError('船舶来源身份不匹配')

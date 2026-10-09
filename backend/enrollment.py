@@ -1,5 +1,7 @@
 """Resolve one user-supplied identifier before creating a monitor."""
 import re
+import math
+from .collection import CollectionDeferred
 from .models import MonitorCreate
 from .marine_details import fetch_public
 from .sdk_providers import fr24_request, FlightRadarProvider, SDKGateway
@@ -21,11 +23,18 @@ class EnrollmentService:
     def resolve(self, request):
         try:
             return self._vessel(request) if request.kind == 'vessel' else self._aircraft(request)
+        except CollectionDeferred as exc:
+            raise LookupUnavailable(str(exc)+'；本次未创建监控对象') from exc
         except (FetchError, ConnectionError, TimeoutError) as exc:
+            if request.kind=='vessel' and str(getattr(exc,'payload',{}).get('http_status')) in {'403','429'}:
+                wait=math.ceil(self.gateway.retry_in('marinetraffic-sdk-v1'))
+                message=f'船舶数据源暂时拒绝访问，约 {wait} 秒后可再试' if wait else '船舶数据源暂时拒绝访问，请稍后重试'
+                raise LookupUnavailable(message+'；本次未创建监控对象') from exc
             raise LookupUnavailable('数据源暂时无法查询，请稍后重试；本次未创建监控对象') from exc
 
     def _vessel(self, request):
-        search = self.marine('search',request.identifier)
+        search = self.gateway.run('marinetraffic-sdk-v1-search',request.identifier,
+                                  lambda:self.marine('search',request.identifier))
         evidence = {'search': search}
         body = search.get('body') or {}
         if not isinstance(body.get('results'),list):
@@ -39,7 +48,8 @@ class EnrollmentService:
         if len(candidates) != 1:
             raise ValueError('该标识码匹配到多艘船，请核对号码或改用另一种标识码')
         ship_id = next(iter(candidates))
-        general = self.marine('general',ship_id)
+        general = self.gateway.run('marinetraffic-sdk-v1-general',ship_id,
+                                   lambda:self.marine('general',ship_id))
         evidence['general'] = general
         body = general.get('body') or {}
         if str(body.get('shipId')) != ship_id:
